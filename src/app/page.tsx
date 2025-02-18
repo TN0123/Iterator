@@ -1,101 +1,215 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect, useRef } from "react";
+import Prism from "prismjs";
+import "prismjs/themes/prism-tomorrow.css";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-python";
+import "prismjs/plugins/autoloader/prism-autoloader";
+import { Copy } from "lucide-react";
+
+interface Message {
+  type: "user" | "llmA" | "llmB";
+  content: string;
+}
+
+interface ChatResponse {
+  originalPrompt: string;
+  instructions: string;
+  finalCode: string;
+  llmAOutput: string[];
+  llmBOutput: string[];
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [Bmessages, setBmessages] = useState<Message[]>([]);
+  const [Binput, setBinput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    chatContainerRef.current?.scrollTo({
+      top: chatContainerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    Prism.highlightAll();
+  }, [messages, Bmessages]);
+
+  const handleBSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!Binput.trim()) return;
+
+    setIsLoading(true);
+    const userMessage: Message = { type: "user", content: Binput };
+    setBmessages((prev) => [...prev, userMessage]);
+
+    try {
+      const response = await fetch("http://localhost:3001/api/dumbchat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: Binput }),
+      });
+
+      const data: ChatResponse = await response.json();
+
+      const newMessages: Message[] = [
+        { type: "llmB", content: data.finalCode },
+      ];
+
+      setBmessages((prev) => [...prev, ...newMessages]);
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setIsLoading(false);
+      setBinput("");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    setIsLoading(true);
+    const userMessage: Message = { type: "user", content: input };
+    setMessages((prev) => [...prev, userMessage]);
+
+    try {
+      const response = await fetch("http://localhost:3001/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: input }),
+      });
+
+      const data: ChatResponse = await response.json();
+
+      const maxLength = Math.max(
+        data.llmAOutput.length,
+        data.llmBOutput.length
+      );
+
+      const newMessages: Message[] = [];
+      for (let i = 0; i < maxLength; i++) {
+        if (i < data.llmAOutput.length) {
+          newMessages.push({ type: "llmA", content: data.llmAOutput[i] });
+        }
+        if (i < data.llmBOutput.length) {
+          newMessages.push({ type: "llmB", content: data.llmBOutput[i] });
+        }
+      }
+
+      // const newMessages: Message[] = [
+      //   { type: "llmA", content: data.instructions },
+      //   { type: "llmB", content: data.finalCode },
+      // ];
+
+      setMessages((prev) => [...prev, ...newMessages]);
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setIsLoading(false);
+      setInput("");
+    }
+  };
+
+  return (
+    <div className="flex bg-gray-200 justify-center items-center h-screen">
+      <div className="w-[70%] mx-auto mt-10 p-4 bg-white shadow-lg rounded-lg flex flex-col h-[80vh] border border-gray-200">
+        <h1 className="text-2xl font-bold mb-4">Multi-Agent Code Generation</h1>
+        <div
+          ref={chatContainerRef}
+          className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300"
+        >
+          {messages.map((message, index) => {
+            let content = message.content.trim();
+            let language = "plaintext";
+            if (content.startsWith("```")) {
+              const lines = content.split("\n");
+              const firstLine = lines[0].trim().replace(/```/g, "");
+              if (firstLine) {
+                language = firstLine;
+              }
+              content = lines.slice(1).join("\n").trim();
+            }
+
+            return (
+              <div
+                key={index}
+                className={`p-3 rounded-lg text-white break-words ${
+                  message.type === "user"
+                    ? "bg-blue-600 self-end ml-auto max-w-[75%]"
+                    : message.type === "llmA"
+                    ? "bg-green-600 max-w-full"
+                    : "bg-purple-600 max-w-full"
+                }`}
+                style={{ wordWrap: "break-word", overflow: "hidden" }}
+              >
+                <div className="flex items-center mb-2">
+                  <h1>
+                    {message.type === "llmA"
+                      ? "Instructions AI"
+                      : message.type === "llmB"
+                      ? "Coder AI"
+                      : "You"}
+                  </h1>
+                  {message.type === "llmB" && (
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(content);
+                          setCopied(true);
+                          setTimeout(() => {
+                            setCopied(false);
+                          }, 2000);
+                        }}
+                      >
+                        <Copy className="text-black mx-4 hover:text-white transition cursor-pointer" />
+                      </button>
+                      <span
+                        className={`text-gray-200 ml-2 opacity-0 transition-opacity ease-in-out ${
+                          copied ? "opacity-100" : ""
+                        }`}
+                      >
+                        Copied!
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <pre>
+                  <code className={`language-${language}`}>{content}</code>
+                </pre>
+              </div>
+            );
+          })}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+
+        <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            disabled={isLoading}
+            className="flex-1 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="px-5 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            Send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
