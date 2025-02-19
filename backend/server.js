@@ -2,8 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
-const { BufferMemory } = require("langchain/memory");
-const { LLMChain } = require("langchain/chains");
+const { StateGraph, END, START } = require("@langchain/langgraph");
+const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 
 require("dotenv").config();
@@ -12,11 +12,40 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// dumb ai model
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// Define state
+const graphStateChannels = {
+  task: {
+    value: (prevTask, task) => task,
+  },
+  instructions: {
+    value: (prevInstructions, instructions) => instructions,
+  },
+  currentCode: {
+    value: (prevCode, code) => code,
+  },
+  codeReview: {
+    value: (prevCodeReview, codeReview) => codeReview,
+  },
+  isCorrect: {
+    value: (prevIsCorrect, isCorrect) => isCorrect,
+  },
+  iterations: {
+    value: (prevIterations, iterations) => iterations,
+  },
+  llmAOutput: {
+    value: (prevOutput, output) => output,
+  },
+  llmBOutput: {
+    value: (prevOutput, output) => output,
+  },
+  next: {
+    value: (prevNext, next) => next,
+  },
+};
 
-// agent models
+const maxIterations = 3;
+
+// Initialize AI models
 const ai_a = new ChatGoogleGenerativeAI({
   modelName: "gemini-1.5-flash",
   apiKey: process.env.GEMINI_API_KEY,
@@ -29,150 +58,166 @@ const ai_b = new ChatGoogleGenerativeAI({
   maxOutputTokens: 2048,
 });
 
-// agent memories
-const ai_a_memory = new BufferMemory({
-  returnMessages: true,
-});
+// Define prompts
+const prompts = {
+  instruct: ChatPromptTemplate.fromTemplate(`
+    You are a developer who is pair programming with another developer.
+    You are given a task and you want to instruct the other developer on 
+    how to write code to solve the problem. The other developer will be 
+    writing code only, you will be responsible for running their code later.
+    Limit your instructions to be under 100 words but be as specific as 
+    possible. Respond with only a numbered list of instructions and a brief 
+    summary of the task. If the task requires more than one file, include a file tree
+    , otherwise just tell them the name of the file they should create.
+    Task: {input}
+  `),
 
-const ai_b_memory = new BufferMemory({
-  returnMessages: true,
-});
+  review: ChatPromptTemplate.fromTemplate(`
+    You are a developer who is pair programming with another developer.
+    You have been given this code by the other developer. Find any errors
+    in the code. If there are errors, be concise in your explanation of
+    the errors. If the code is correct, say the following phrase exactly:
+    the code is correct.
+    Code: {input}
+  `),
 
-// agent prompts
-const ai_a_instruct_step = ChatPromptTemplate.fromTemplate(`
-  You are a developer who is pair programming with another developer.
-  You are given a task and you want to give the other developer a step
-  by step explanation on how to solve the problem. Limit your instructions
-  to be under 100 words but be thorough in your description. The other
-  developer should be able to read your instructions and write neat and
-  efficient code with your logic. Here is the task, respond with only a
-  numbered list of instructions and a brief summary of the task: {input}
-`);
+  generate: ChatPromptTemplate.fromTemplate(`
+    You are a developer who is pair programming with another developer.
+    You have been given these instructions by the other developer. Write neat,
+    well formatted, efficient code with the logic provided by the developer. 
+    If you are asked to generate multiple files, label the code for each file 
+    with the following format: "FILE: filename".
+    Instructions: {input}
+  `),
 
-const ai_a_review_step = ChatPromptTemplate.fromTemplate(`
-  You are a developer who is pair programming with another developer.
-  You have been given this code by the other developer. Find any errors
-  in the code. If there are errors, be concise in your explanation of
-  the errors. If the code is correct, say the following phrase exactly:
-  the code is correct.
-  Here is the code:
-  {input}
-`);
+  revise: ChatPromptTemplate.fromTemplate(`
+    You are a developer who is pair programming with another developer.
+    The other developer received your code and has provided the
+    following feedback. Follow the feedback to revise the code. Respond with
+    the code only.
+    Feedback: {input}
+  `),
+};
 
-const ai_b_generate_step = ChatPromptTemplate.fromTemplate(`
-  You are a developer who is pair programming with another developer.
-  You have been given these instructions by the other developer. Write neat,
-  well formatted, efficient code with the logic provided by the developer. Here are
-  the instructions, respond only with the code: {input}
-`);
+// Define agent functions
+const instructAgent = async (state) => {
+  // console.log("INSTRUCT AGENT STATE:", state);
+  const chain = RunnableSequence.from([prompts.instruct, ai_a]);
+  const response = await chain.invoke({ input: state.task });
+  const instructions = response.content;
+  console.log("INSTRUCTIONS: ", instructions);
 
-const ai_b_revise_step = ChatPromptTemplate.fromTemplate(`
-  You are a developer who is pair programming with another developer.
-  The other the developer received your code and has provided the
-  following feedback. Follow the feedback to revise the code. Respond with
-  the code only. Here is the feedback: {input}
-`);
+  return {
+    state,
+    instructions,
+    llmAOutput: (state.llmAOutput || []).concat([instructions]),
+    next: "generate",
+  };
+};
 
-// agent chains
-// set verbose to true for detailed logs
-const ai_a_instruct_chain = new LLMChain({
-  llm: ai_a,
-  prompt: ai_a_instruct_step,
-  memory: ai_a_memory,
-  verbose: false,
-});
+const generateAgent = async (state) => {
+  // console.log("GENERATE AGENT STATE:", state);
+  const chain = RunnableSequence.from([prompts.generate, ai_b]);
+  const response = await chain.invoke({ input: state.instructions });
+  const code = response.content;
+  console.log("GENERATED CODE: ", code);
 
-const ai_a_review_chain = new LLMChain({
-  llm: ai_a,
-  prompt: ai_a_review_step,
-  memory: ai_a_memory,
-  verbose: false,
-});
+  return {
+    state,
+    currentCode: code,
+    llmBOutput: (state.llmBOutput || []).concat([code]),
+    next: "review",
+  };
+};
 
-const ai_b_generate_chain = new LLMChain({
-  llm: ai_b,
-  prompt: ai_b_generate_step,
-  memory: ai_b_memory,
-  verbose: false,
-});
+const reviewAgent = async (state) => {
+  // console.log("REVIEW AGENT STATE:", state);
+  const chain = RunnableSequence.from([prompts.review, ai_a]);
+  const response = await chain.invoke({ input: state.currentCode });
+  const codeReview = response.content;
+  const isCorrect = codeReview.toLowerCase().includes("the code is correct");
+  console.log("REVIEW: ", codeReview);
 
-const ai_b_revise_chain = new LLMChain({
-  llm: ai_b,
-  prompt: ai_b_revise_step,
-  memory: ai_b_memory,
-  verbose: false,
-});
+  return {
+    state,
+    isCorrect,
+    codeReview,
+    llmAOutput: (state.llmAOutput || []).concat([codeReview]),
+  };
+};
 
-app.post("/api/dumbchat", async (req, res) => {
-  const userInput = req.body.message;
-  const prompt = `
-    Write neat, well formatted, and efficient code to solve the following task,
-    return the code only. Here is the task: ${userInput}
-    `;
+const reviseAgent = async (state) => {
+  // console.log("REVISE AGENT STATE:", state);
+  if (state.iterations >= maxIterations) {
+    return {
+      state,
+      next: "end",
+    };
+  }
 
-  const response = await geminiModel.generateContent(prompt);
-  res.json({ finalCode: response.response.text() });
-});
+  const chain = RunnableSequence.from([prompts.revise, ai_b]);
+  const response = await chain.invoke({ input: state.codeReview });
+  const code = response.content;
+  console.log("REVISION: ", code);
 
+  return {
+    state,
+    currentCode: code,
+    llmBOutput: (state.llmBOutput || []).concat([code]),
+    iterations: state.iterations + 1,
+    next: "review",
+  };
+};
+
+// Create workflow graph
+const workflow = new StateGraph({ channels: graphStateChannels });
+
+// Add nodes to graph with proper configuration
+workflow.addNode("instruct", instructAgent);
+workflow.addNode("generate", generateAgent);
+workflow.addNode("review", reviewAgent);
+workflow.addNode("revise", reviseAgent);
+
+// Set the entry point
+workflow.addEdge(START, "instruct");
+
+// conditional routing
+const endOrRevise = (state) => (state.isCorrect ? END : "revise");
+
+// Add edges
+workflow.addEdge("instruct", "generate", (state) => state.next === "generate");
+workflow.addEdge("generate", "review", (state) => state.next === "review");
+workflow.addConditionalEdges("review", endOrRevise);
+workflow.addEdge("revise", "review", (state) => state.next === "review");
+workflow.addEdge("revise", END, (state) => state.next === "end");
+
+// Compile the graph
+const chain = workflow.compile();
+
+// API endpoints
 app.post("/api/chat", async (req, res) => {
-  let llmAOutput = [];
-  let llmBOutput = [];
   try {
     const userInput = req.body.message;
-    let currentCode = "";
-    let finalCode = "";
-    let iterations = 0;
-    const MAX_ITERATIONS = 3;
 
-    const instructions = await ai_a_instruct_chain.call({ input: userInput });
-    console.log("INSTRUCTIONS:\n", instructions.text);
-    llmAOutput.push(instructions.text);
-
-    const codeResult = await ai_b_generate_chain.call({
-      input: instructions.text,
+    const result = await chain.invoke({
+      task: userInput,
+      instructions: "",
+      currentCode: "",
+      codeReview: "",
+      isCorrect: false,
+      iterations: 0,
+      llmAOutput: [],
+      llmBOutput: [],
+      next: "instruct",
     });
-    currentCode = codeResult.text;
-    console.log("FIRST ATTEMPT: \n ", currentCode);
-    llmBOutput.push(currentCode);
-
-    while (iterations < MAX_ITERATIONS) {
-      await ai_a_memory.loadMemoryVariables({});
-      await ai_b_memory.loadMemoryVariables({});
-
-      const reviewResult = await ai_a_review_chain.call({
-        input: currentCode,
-      });
-      console.log(iterations, "REVIEW: \n", reviewResult.text);
-      llmAOutput.push(reviewResult.text);
-
-      if (reviewResult.text.toLowerCase().includes("the code is correct")) {
-        finalCode = currentCode;
-        break;
-      }
-
-      const revisionResult = await ai_b_revise_chain.call({
-        input: reviewResult.text,
-      });
-      currentCode = revisionResult.text;
-      console.log(iterations, "REVISION: \n", currentCode);
-      llmBOutput.push(currentCode);
-      iterations++;
-
-      if (iterations === MAX_ITERATIONS) {
-        finalCode = currentCode;
-      }
-    }
-
-    await ai_a_memory.clear();
-    await ai_b_memory.clear();
 
     res.json({
       originalPrompt: userInput,
-      llmAOutput: llmAOutput,
-      llmBOutput: llmBOutput,
-      instructions: instructions.text,
-      finalCode: finalCode,
-      iterationsUsed: iterations,
+      llmAOutput: result.llmAOutput,
+      llmBOutput: result.llmBOutput,
+      instructions: result.instructions,
+      finalCode: result.currentCode,
+      iterationsUsed: result.iterations,
     });
   } catch (error) {
     console.error("Error:", error);
