@@ -138,7 +138,7 @@ export default function Home() {
               if (firstLine) {
                 language = firstLine;
               }
-              content = lines.slice(1).join("\n").trim();
+              content = lines.slice(0).join("\n").trim();
             }
 
             return (
