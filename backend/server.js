@@ -5,12 +5,45 @@ const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { StateGraph, END, START } = require("@langchain/langgraph");
 const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
+const Docker = require("dockerode");
 
 require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const docker = new Docker();
+
+// Helper functions for container functionality
+
+const parseGeneratedCode = (code) => {
+  const files = {};
+  let currentFile = null;
+  let currentContent = [];
+
+  const lines = code.split("\n");
+
+  for (const line of lines) {
+    if (line.startsWith("FILE: ")) {
+      if (currentFile) {
+        files[currentFile] = currentContent.join("\n");
+      }
+      currentFile = line.replace("FILE: ", "").trim();
+      currentContent = [];
+    } else {
+      if (currentFile) {
+        currentContent.push(line);
+      }
+    }
+
+    if (currentFile) {
+      files[currentFile] = currentContent.join("\n");
+    }
+  }
+
+  return files;
+};
 
 // Define state
 const graphStateChannels = {
@@ -210,6 +243,8 @@ app.post("/api/chat", async (req, res) => {
       llmBOutput: [],
       next: "instruct",
     });
+
+    const files = parseGeneratedCode(result.currentCode);
 
     res.json({
       originalPrompt: userInput,
