@@ -307,6 +307,7 @@ app.post("/api/chat", async (req, res) => {
     const container = await startContainer();
     await writeFilesToContainer(container, files);
 
+    // the logic of cleaning up the container needs to be rethought, comment out below for persistent storage of container
     await cleanUpContainer(container);
 
     res.json({
