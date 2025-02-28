@@ -5,12 +5,103 @@ const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { StateGraph, END, START } = require("@langchain/langgraph");
 const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
+const Docker = require("dockerode");
+const tar = require("tar-stream");
 
 require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const docker = new Docker();
+
+// Helper functions for container functionality
+
+const parseGeneratedCode = (code) => {
+  const files = {};
+  let currentFile = null;
+  let currentContent = [];
+
+  const lines = code.split("\n");
+
+  for (const line of lines) {
+    if (line.startsWith("FILE: ")) {
+      if (currentFile) {
+        files[currentFile] = currentContent.join("\n");
+      }
+      currentFile = line.replace("FILE: ", "").trim();
+      currentContent = [];
+    } else {
+      if (currentFile) {
+        currentContent.push(line);
+      }
+    }
+
+    if (currentFile) {
+      files[currentFile] = currentContent.join("\n");
+    }
+  }
+
+  return files;
+};
+
+// Docker
+const startContainer = async () => {
+  const container = await docker.createContainer({
+    Image: "ubuntu",
+    Tty: true,
+    Cmd: ["/bin/bash"],
+    HostConfig: {
+      Binds: ["/tmp/codeStorage:/code"],
+    },
+  });
+  await container.start();
+
+  container.logs(
+    {
+      follow: true,
+      stdout: true,
+      stderr: true,
+    },
+    (err, stream) => {
+      if (err) {
+        console.error("Error getting container logs:", err);
+        return;
+      }
+      stream.on("data", (chunk) => {
+        console.log(chunk.toString());
+      });
+    }
+  );
+
+  return container;
+};
+
+const writeFilesToContainer = async (container, files) => {
+  for (const [filename, content] of Object.entries(files)) {
+    const filePath = `/code/${filename}`;
+    const pack = tar.pack();
+
+    pack.entry({ name: filename }, content);
+    pack.finalize();
+
+    const stream = await new Promise((resolve, reject) => {
+      const buffer = [];
+      pack.on("data", (chunk) => buffer.push(chunk));
+      pack.on("end", () => resolve(Buffer.concat(buffer)));
+      pack.on("error", reject);
+    });
+
+    await container.putArchive(stream, { path: "/code" });
+    console.log(`File ${filename} written to container.`);
+  }
+};
+
+const cleanUpContainer = async (container) => {
+  await container.stop();
+  await container.remove();
+};
 
 // Define state
 const graphStateChannels = {
@@ -210,6 +301,14 @@ app.post("/api/chat", async (req, res) => {
       llmBOutput: [],
       next: "instruct",
     });
+
+    const files = parseGeneratedCode(result.currentCode);
+
+    const container = await startContainer();
+    await writeFilesToContainer(container, files);
+
+    // the logic of cleaning up the container needs to be rethought, comment out below for persistent storage of container
+    await cleanUpContainer(container);
 
     res.json({
       originalPrompt: userInput,
