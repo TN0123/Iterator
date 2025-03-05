@@ -45,7 +45,8 @@ workflow.addNode("revise", agents.reviseAgent);
 workflow.addEdge(START, "instruct");
 
 // conditional routing
-const endOrRevise = (state) => (state.isCorrect ? END : "revise");
+const endOrRevise = (state) =>
+  state.isCorrect || state.iterations > 3 ? END : "revise";
 
 // Add edges
 workflow.addEdge("instruct", "generate", (state) => state.next === "generate");

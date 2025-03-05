@@ -24,9 +24,10 @@ const prompts = {
   review: ChatPromptTemplate.fromTemplate(promptValues.reviewPrompt),
   generate: ChatPromptTemplate.fromTemplate(promptValues.generatePrompt),
   revise: ChatPromptTemplate.fromTemplate(promptValues.revisePrompt),
+  generateWithError: ChatPromptTemplate.fromTemplate(
+    promptValues.generateWithErrorPrompt
+  ),
 };
-
-const maxIterations = 3;
 
 // Define Agents
 const instructAgent = async (state) => {
@@ -46,7 +47,7 @@ const instructAgent = async (state) => {
 
 const generateAgent = async (state) => {
   // console.log("GENERATE AGENT STATE:", state);
-  const chain = RunnableSequence.from([prompts.generate, ai_b]);
+  const chain = RunnableSequence.from([prompts.generateWithError, ai_b]);
   const response = await chain.invoke({ input: state.instructions });
   const code = response.content;
   console.log("GENERATED CODE: ", code);
@@ -77,12 +78,6 @@ const reviewAgent = async (state) => {
 
 const reviseAgent = async (state) => {
   // console.log("REVISE AGENT STATE:", state);
-  if (state.iterations >= maxIterations) {
-    return {
-      state,
-      next: "end",
-    };
-  }
 
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
   const response = await chain.invoke({ input: state.codeReview });

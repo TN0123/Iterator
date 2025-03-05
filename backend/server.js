@@ -29,11 +29,11 @@ app.post("/api/chat", async (req, res) => {
 
     const files = utils.parseGeneratedCode(result.currentCode);
 
-    const container = await docker.startContainer();
-    await docker.writeFilesToContainer(container, files);
+    //const container = await docker.startContainer();
+    //await docker.writeFilesToContainer(container, files);
 
     // the logic of cleaning up the container needs to be rethought, comment out below for persistent storage of container
-    await docker.cleanUpContainer(container);
+    //await docker.cleanUpContainer(container);
 
     res.json({
       originalPrompt: userInput,
