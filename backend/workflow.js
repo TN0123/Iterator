@@ -30,6 +30,12 @@ const graphStateChannels = {
   next: {
     value: (prevNext, next) => next,
   },
+  container: {
+    value: (prevContainer, container) => container,
+  },
+  codeFiles: {
+    value: (prevFiles, files) => files,
+  },
 };
 
 // Create workflow graph

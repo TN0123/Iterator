@@ -15,25 +15,12 @@ app.post("/api/chat", async (req, res) => {
   try {
     const userInput = req.body.message;
 
+    const container = await docker.startContainer();
+
     const result = await workflow.chain.invoke({
       task: userInput,
-      instructions: "",
-      currentCode: "",
-      codeReview: "",
-      isCorrect: false,
-      iterations: 0,
-      llmAOutput: [],
-      llmBOutput: [],
-      next: "instruct",
+      container,
     });
-
-    const files = utils.parseGeneratedCode(result.currentCode);
-
-    //const container = await docker.startContainer();
-    //await docker.writeFilesToContainer(container, files);
-
-    // the logic of cleaning up the container needs to be rethought, comment out below for persistent storage of container
-    //await docker.cleanUpContainer(container);
 
     res.json({
       originalPrompt: userInput,

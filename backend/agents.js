@@ -2,6 +2,8 @@ const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const promptValues = require("./prompts");
+const docker = require("./docker");
+const utils = require("./utils");
 
 require("dotenv").config();
 
@@ -47,14 +49,24 @@ const instructAgent = async (state) => {
 
 const generateAgent = async (state) => {
   // console.log("GENERATE AGENT STATE:", state);
-  const chain = RunnableSequence.from([prompts.generateWithError, ai_b]);
+  const chain = RunnableSequence.from([prompts.generate, ai_b]);
   const response = await chain.invoke({ input: state.instructions });
   const code = response.content;
   console.log("GENERATED CODE: ", code);
 
+  // Parse code into files
+  const codeFiles = utils.parseCodeFiles(code);
+  console.log("CODE FILES: ", codeFiles);
+
+  // Save files to Docker container
+  for (const [filename, content] of Object.entries(codeFiles)) {
+    await docker.createOrUpdateFile(state.container, filename, content);
+  }
+
   return {
     state,
     currentCode: code,
+    codeFiles,
     llmBOutput: (state.llmBOutput || []).concat([code]),
     next: "review",
   };
@@ -62,8 +74,19 @@ const generateAgent = async (state) => {
 
 const reviewAgent = async (state) => {
   // console.log("REVIEW AGENT STATE:", state);
+
+  const fileList = await docker.listFiles(state.container);
+  console.log("FILES: ", fileList);
+  let codeForReview = "";
+
+  // Read each file and format for review
+  for (const file of fileList) {
+    const content = await docker.readFile(state.container, file);
+    codeForReview += `FILE: ${file}\n${content}\n\n`;
+  }
+
   const chain = RunnableSequence.from([prompts.review, ai_a]);
-  const response = await chain.invoke({ input: state.currentCode });
+  const response = await chain.invoke({ input: codeForReview });
   const codeReview = response.content;
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   console.log("REVIEW: ", codeReview);
@@ -77,18 +100,30 @@ const reviewAgent = async (state) => {
 };
 
 const reviseAgent = async (state) => {
-  // console.log("REVISE AGENT STATE:", state);
+  //console.log("REVISE AGENT STATE:", state);
 
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
   const response = await chain.invoke({ input: state.codeReview });
-  const code = response.content;
-  console.log("REVISION: ", code);
+  const revisionDiff = response.content;
+  console.log("REVISION: ", revisionDiff);
+
+  // Apply the diff changes to the files
+  const updatedFiles = await utils.parseDiffUpdates(
+    revisionDiff,
+    state.container,
+    state.codeFiles
+  );
+
+  // Update files in Docker container
+  for (const [filename, content] of Object.entries(updatedFiles)) {
+    await docker.createOrUpdateFile(state.container, filename, content);
+  }
 
   return {
-    state,
-    currentCode: code,
-    llmBOutput: (state.llmBOutput || []).concat([code]),
-    iterations: state.iterations + 1,
+    ...state,
+    codeFiles: updatedFiles,
+    llmBOutput: (state.llmBOutput || []).concat([revisionDiff]),
+    iterations: (state.iterations || 0) + 1,
     next: "review",
   };
 };
