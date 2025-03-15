@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Copy } from "lucide-react";
 
 interface FileExplorerProps {
   containerId: string;
@@ -8,6 +9,7 @@ export default function FileExplorer({ containerId }: FileExplorerProps) {
   const [files, setFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function fetchFiles() {
@@ -59,7 +61,27 @@ export default function FileExplorer({ containerId }: FileExplorerProps) {
       <div className="w-3/4 p-2 overflow-auto">
         {selectedFile ? (
           <>
-            <h2 className="font-bold mb-2">{selectedFile}</h2>
+            <div className="flex items-center mb-2">
+              <h2 className="font-bold">{selectedFile}</h2>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(fileContent);
+                  setCopied(true);
+                  setTimeout(() => {
+                    setCopied(false);
+                  }, 2000);
+                }}
+              >
+                <Copy className="text-black mx-4 hover:text-gray-500 transition cursor-pointer" />
+              </button>
+              <span
+                className={`text-black ml-2 opacity-0 transition-opacity ease-in-out ${
+                  copied ? "opacity-100" : ""
+                }`}
+              >
+                Copied!
+              </span>
+            </div>
             <pre className="bg-gray-100 p-2 rounded-md overflow-auto">
               <code>{fileContent}</code>
             </pre>

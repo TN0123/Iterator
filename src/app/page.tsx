@@ -26,11 +26,8 @@ interface ChatResponse {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [Bmessages, setBmessages] = useState<Message[]>([]);
-  const [Binput, setBinput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
   const [containerId, setContainerId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -60,7 +57,6 @@ export default function Home() {
       if (data.success) {
         setContainerId(null);
         setMessages([]);
-        setBmessages([]);
         alert("Container cleared successfully!");
       } else {
         alert(`Failed to clear container: ${data.message}`);
@@ -82,39 +78,7 @@ export default function Home() {
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [messages, Bmessages]);
-
-  const handleBSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!Binput.trim()) return;
-
-    setIsLoading(true);
-    const userMessage: Message = { type: "user", content: Binput };
-    setBmessages((prev) => [...prev, userMessage]);
-
-    try {
-      const response = await fetch("http://localhost:3001/api/dumbchat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: Binput }),
-      });
-
-      const data: ChatResponse = await response.json();
-
-      const newMessages: Message[] = [
-        { type: "llmB", content: data.finalCode },
-      ];
-
-      setBmessages((prev) => [...prev, ...newMessages]);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setIsLoading(false);
-      setBinput("");
-    }
-  };
+  }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,28 +177,6 @@ export default function Home() {
                       ? "Coder AI"
                       : "You"}
                   </h1>
-                  {message.type === "llmB" && (
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(content);
-                          setCopied(true);
-                          setTimeout(() => {
-                            setCopied(false);
-                          }, 2000);
-                        }}
-                      >
-                        <Copy className="text-black mx-4 hover:text-white transition cursor-pointer" />
-                      </button>
-                      <span
-                        className={`text-gray-200 ml-2 opacity-0 transition-opacity ease-in-out ${
-                          copied ? "opacity-100" : ""
-                        }`}
-                      >
-                        Copied!
-                      </span>
-                    </div>
-                  )}
                 </div>
                 <pre>
                   <code className={`language-${language}`}>{content}</code>
