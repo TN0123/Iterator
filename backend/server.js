@@ -7,6 +7,7 @@ const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const Docker = require("dockerode");
 const tar = require("tar-stream");
+const { default: next } = require("next");
 
 require("dotenv").config();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 const docker = new Docker();
 
 // Helper functions for container functionality
+const cleanCode = (code) => code.replace(/```[a-zA-Z]*/g, "").replace(/```/g, "");
 
 const parseGeneratedCode = (code) => {
   const files = {};
@@ -48,35 +50,41 @@ const parseGeneratedCode = (code) => {
 
 // Docker
 const startContainer = async () => {
+  const imageName = "multi-environment";
+
+  try {
+    console.log("Building Docker image...");
+    const stream = await docker.buildImage(
+      { context: ".", src: ["Dockerfile"] },
+      { t: imageName }
+    );
+
+    await new Promise((resolve, reject) => {
+      docker.modem.followProgress(stream, (err, res) => (err ? reject(err) : resolve(res)));
+    });
+
+    console.log("Docker image built successfully.");
+  } catch (error) {
+    console.error("Error building Docker image:", error);
+    throw error;
+  }
+
+  // Create and start the container from the built image
   const container = await docker.createContainer({
-    Image: "ubuntu",
+    Image: imageName, // Use the custom image
     Tty: true,
-    Cmd: ["/bin/bash"],
+    Cmd: ["/bin/bash"], // Default to an interactive bash shell
     HostConfig: {
-      Binds: ["/tmp/codeStorage:/code"],
+      Binds: ["/tmp/codeStorage:/code"], // Mount volume for persistent storage
     },
   });
-  await container.start();
 
-  container.logs(
-    {
-      follow: true,
-      stdout: true,
-      stderr: true,
-    },
-    (err, stream) => {
-      if (err) {
-        console.error("Error getting container logs:", err);
-        return;
-      }
-      stream.on("data", (chunk) => {
-        console.log(chunk.toString());
-      });
-    }
-  );
+  await container.start();
+  console.log("Container started.");
 
   return container;
 };
+
 
 const writeFilesToContainer = async (container, files) => {
   for (const [filename, content] of Object.entries(files)) {
@@ -138,13 +146,13 @@ const maxIterations = 3;
 
 // Initialize AI models
 const ai_a = new ChatGoogleGenerativeAI({
-  modelName: "gemini-1.5-flash",
+  modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
   maxOutputTokens: 2048,
 });
 
 const ai_b = new ChatGoogleGenerativeAI({
-  modelName: "gemini-1.5-flash",
+  modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
   maxOutputTokens: 2048,
 });
@@ -188,6 +196,19 @@ const prompts = {
     the code only.
     Feedback: {input}
   `),
+
+  unit_test: ChatPromptTemplate.fromTemplate(`
+    You are a developer who is pair programming with another developer.
+    You have been given this code by the other developer and the following
+    instructions by the client. Write a series of command-line commands to unit test the other developers code. Ensure that
+    your tests are exhaustive and adequatly test the code to ensure it follows
+    the clients instructions. If there is no way to unit test the code, respond with the
+    following phrase exactly: Cannot unit-test. Otherwise, ONLY respond with exact command-line commands to be put in a bash shell (i.e no other code), 
+    seperated by a new-line, without any additional comments. Ensure your commands involve installing all necessary dependencies (assume no dependencies have been installed).
+    Code: {code}
+
+    Instructions: {input}
+  `),
 };
 
 // Define agent functions
@@ -210,24 +231,78 @@ const generateAgent = async (state) => {
   // console.log("GENERATE AGENT STATE:", state);
   const chain = RunnableSequence.from([prompts.generate, ai_b]);
   const response = await chain.invoke({ input: state.instructions });
-  const code = response.content;
+  const code = cleanCode(response.content);
   console.log("GENERATED CODE: ", code);
 
   return {
     state,
     currentCode: code,
     llmBOutput: (state.llmBOutput || []).concat([code]),
+    next: "unit_test",
+  };
+};
+
+const unitTestingAgent = async (state) => {
+  const chain = RunnableSequence.from([prompts.unit_test, ai_a]);
+  const response = await chain.invoke({ input: state.instructions, code: state.currentCode });
+  const unitTestCommands = cleanCode(response.content);
+  console.log(unitTestCommands);
+  const canUnitTest = !unitTestCommands.toLowerCase().includes("cannot unit-test");
+
+  if (!canUnitTest) {
+    return { state, canUnitTest, unitTestResults: "No unit tests applicable.", next: "review" };
+  }
+
+  // Parse the generated code into files
+  const files = parseGeneratedCode(state.currentCode);
+
+  // Start the Docker container
+  const container = await startContainer();
+  await writeFilesToContainer(container, files);
+
+  const commands = unitTestCommands.split("\n").filter(cmd => cmd.trim() !== "");
+  let output = "";
+  
+  for (const cmd of commands) {
+    const exec = await container.exec({
+      AttachStdout: true,
+      AttachStderr: true,
+      Cmd: ["/bin/sh", "-c", cmd],
+      Tty: true,
+    });
+  
+    const stream = await exec.start({ hijack: true, stdin: true });
+  
+    let commandOutput = "";
+    stream.on("data", (chunk) => {
+      commandOutput += chunk.toString();
+    });
+  
+    await new Promise((resolve) => stream.on("end", resolve));
+  
+    output += `\nCommand: ${cmd}\nOutput:\n${commandOutput}\n`;
+  }  
+
+  console.log("Unit Test Output:", output);
+
+  // Stop and clean up container
+  await cleanUpContainer(container);
+
+  return {
+    state,
+    canUnitTest,
+    unitTestResults: output,
     next: "review",
   };
 };
 
+
 const reviewAgent = async (state) => {
-  // console.log("REVIEW AGENT STATE:", state);
   const chain = RunnableSequence.from([prompts.review, ai_a]);
-  const response = await chain.invoke({ input: state.currentCode });
+  const reviewInput = `Code:\n${state.currentCode}\n\nUnit Test Results:\n${state.unitTestResults}`;
+  const response = await chain.invoke({ input: reviewInput });
   const codeReview = response.content;
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
-  console.log("REVIEW: ", codeReview);
 
   return {
     state,
@@ -236,6 +311,7 @@ const reviewAgent = async (state) => {
     llmAOutput: (state.llmAOutput || []).concat([codeReview]),
   };
 };
+
 
 const reviseAgent = async (state) => {
   // console.log("REVISE AGENT STATE:", state);
@@ -268,6 +344,8 @@ workflow.addNode("instruct", instructAgent);
 workflow.addNode("generate", generateAgent);
 workflow.addNode("review", reviewAgent);
 workflow.addNode("revise", reviseAgent);
+workflow.addNode("unit_test", unitTestingAgent);
+
 
 // Set the entry point
 workflow.addEdge(START, "instruct");
@@ -277,10 +355,12 @@ const endOrRevise = (state) => (state.isCorrect ? END : "revise");
 
 // Add edges
 workflow.addEdge("instruct", "generate", (state) => state.next === "generate");
-workflow.addEdge("generate", "review", (state) => state.next === "review");
 workflow.addConditionalEdges("review", endOrRevise);
 workflow.addEdge("revise", "review", (state) => state.next === "review");
 workflow.addEdge("revise", END, (state) => state.next === "end");
+workflow.addEdge("generate", "unit_test", (state) => state.next === "unit_test");
+workflow.addEdge("unit_test", "review", (state) => state.next === "review");
+
 
 // Compile the graph
 const chain = workflow.compile();
@@ -302,13 +382,13 @@ app.post("/api/chat", async (req, res) => {
       next: "instruct",
     });
 
-    const files = parseGeneratedCode(result.currentCode);
+    // const files = parseGeneratedCode(result.currentCode);
 
-    const container = await startContainer();
-    await writeFilesToContainer(container, files);
+    // const container = await startContainer();
+    // await writeFilesToContainer(container, files);
 
     // the logic of cleaning up the container needs to be rethought, comment out below for persistent storage of container
-    await cleanUpContainer(container);
+    // await cleanUpContainer(container);
 
     res.json({
       originalPrompt: userInput,

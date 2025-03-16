@@ -12,6 +12,7 @@
     "@google/generative-ai": "^0.21.0",
     "@langchain/google-genai": "^0.1.8",
     "@langchain/langgraph": "^0.2.46",
+    "all": "^0.0.0",
     "cors": "^2.8.5",
     "dockerode": "^4.0.4",
     "dotenv": "^16.4.7",
