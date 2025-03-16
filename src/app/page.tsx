@@ -6,7 +6,8 @@ import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-python";
 import "prismjs/plugins/autoloader/prism-autoloader";
-import { Copy } from "lucide-react";
+import { Copy, RefreshCw } from "lucide-react";
+import FileExplorer from "./components/FileExplorer";
 
 interface Message {
   type: "user" | "llmA" | "llmB";
@@ -19,16 +20,54 @@ interface ChatResponse {
   finalCode: string;
   llmAOutput: string[];
   llmBOutput: string[];
+  containerId?: string;
 }
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [Bmessages, setBmessages] = useState<Message[]>([]);
-  const [Binput, setBinput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
+  const [containerId, setContainerId] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+
+  const clearContainer = async () => {
+    if (
+      !window.confirm(
+        "Are you sure you want to clear the container? All generated files will be lost."
+      )
+    ) {
+      return;
+    }
+
+    setIsClearing(true);
+    try {
+      const response = await fetch(
+        "http://localhost:3001/api/clear-container",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        setContainerId(null);
+        setMessages([]);
+        alert("Container cleared successfully!");
+      } else {
+        alert(`Failed to clear container: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Error clearing container:", error);
+      alert("Error clearing container. See console for details.");
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({
@@ -39,39 +78,7 @@ export default function Home() {
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [messages, Bmessages]);
-
-  const handleBSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!Binput.trim()) return;
-
-    setIsLoading(true);
-    const userMessage: Message = { type: "user", content: Binput };
-    setBmessages((prev) => [...prev, userMessage]);
-
-    try {
-      const response = await fetch("http://localhost:3001/api/dumbchat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: Binput }),
-      });
-
-      const data: ChatResponse = await response.json();
-
-      const newMessages: Message[] = [
-        { type: "llmB", content: data.finalCode },
-      ];
-
-      setBmessages((prev) => [...prev, ...newMessages]);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setIsLoading(false);
-      setBinput("");
-    }
-  };
+  }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,6 +99,10 @@ export default function Home() {
 
       const data: ChatResponse = await response.json();
 
+      if (data.containerId) {
+        setContainerId(data.containerId);
+      }
+
       const maxLength = Math.max(
         data.llmAOutput.length,
         data.llmBOutput.length
@@ -107,11 +118,6 @@ export default function Home() {
         }
       }
 
-      // const newMessages: Message[] = [
-      //   { type: "llmA", content: data.instructions },
-      //   { type: "llmB", content: data.finalCode },
-      // ];
-
       setMessages((prev) => [...prev, ...newMessages]);
     } catch (error) {
       console.error("Error:", error);
@@ -123,8 +129,18 @@ export default function Home() {
 
   return (
     <div className="flex bg-gray-200 justify-center items-center h-screen">
-      <div className="w-[70%] mx-auto mt-10 p-4 bg-white shadow-lg rounded-lg flex flex-col h-[80vh] border border-gray-200">
+      <div className="w-2/5 mx-2 p-4 bg-white shadow-lg rounded-lg flex flex-col h-[80vh] border border-gray-200">
         <h1 className="text-2xl font-bold mb-4">Multi-Agent Code Generation</h1>
+        <button
+          onClick={clearContainer}
+          disabled={isClearing || !containerId}
+          className="flex items-center gap-2 px-4 py-2 w-1/5 my-2 bg-red-500 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 transition"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${isClearing ? "animate-spin" : ""}`}
+          />
+          {isClearing ? "Clearing..." : "Clear"}
+        </button>
         <div
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300"
@@ -161,28 +177,6 @@ export default function Home() {
                       ? "Coder AI"
                       : "You"}
                   </h1>
-                  {message.type === "llmB" && (
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(content);
-                          setCopied(true);
-                          setTimeout(() => {
-                            setCopied(false);
-                          }, 2000);
-                        }}
-                      >
-                        <Copy className="text-black mx-4 hover:text-white transition cursor-pointer" />
-                      </button>
-                      <span
-                        className={`text-gray-200 ml-2 opacity-0 transition-opacity ease-in-out ${
-                          copied ? "opacity-100" : ""
-                        }`}
-                      >
-                        Copied!
-                      </span>
-                    </div>
-                  )}
                 </div>
                 <pre>
                   <code className={`language-${language}`}>{content}</code>
@@ -209,6 +203,18 @@ export default function Home() {
             Send
           </button>
         </form>
+      </div>
+      <div className="w-3/5 h-[80vh] mx-2 bg-white shadow-lg rounded-lg border border-gray-200">
+        {containerId ? (
+          <FileExplorer containerId={containerId} />
+        ) : (
+          <div className="flex items-center justify-center h-full p-4">
+            <p className="text-gray-500 text-center">
+              Waiting for container... <br />
+              Try sending a message to create a container
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
