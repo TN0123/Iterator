@@ -29,6 +29,7 @@ const prompts = {
   generateWithError: ChatPromptTemplate.fromTemplate(
     promptValues.generateWithErrorPrompt
   ),
+  unitTesting: ChatPromptTemplate.fromTemplate(promptValues.unitTestPrompt)
 };
 
 // Define Agents
@@ -68,6 +69,60 @@ const generateAgent = async (state) => {
     currentCode: code,
     codeFiles,
     llmBOutput: (state.llmBOutput || []).concat([code]),
+    next: "unit_test",
+  };
+};
+
+const unitTestingAgent = async (state) => {
+  const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
+  const response = await chain.invoke({ input: state.instructions, code: state.currentCode });
+  const unitTestCommands = cleanCode(response.content);
+  console.log(unitTestCommands);
+  const canUnitTest = !unitTestCommands.toLowerCase().includes("cannot unit-test");
+
+  if (!canUnitTest) {
+    return { state, canUnitTest, unitTestResults: "No unit tests applicable.", next: "review" };
+  }
+
+  // Parse the generated code into files
+  const files = parseGeneratedCode(state.currentCode);
+
+  // Start the Docker container
+  const container = await startContainer();
+  await writeFilesToContainer(container, files);
+
+  const commands = unitTestCommands.split("\n").filter(cmd => cmd.trim() !== "");
+  let output = "";
+  
+  for (const cmd of commands) {
+    const exec = await container.exec({
+      AttachStdout: true,
+      AttachStderr: true,
+      Cmd: ["/bin/sh", "-c", cmd],
+      Tty: true,
+    });
+  
+    const stream = await exec.start({ hijack: true, stdin: true });
+  
+    let commandOutput = "";
+    stream.on("data", (chunk) => {
+      commandOutput += chunk.toString();
+    });
+  
+    await new Promise((resolve) => stream.on("end", resolve));
+  
+    output += `\nCommand: ${cmd}\nOutput:\n${commandOutput}\n`;
+  }  
+
+  console.log("Unit Test Output:", output);
+
+  // Stop and clean up container
+  await cleanUpContainer(container);
+
+  return {
+    state,
+    canUnitTest,
+    unitTestResults: output,
     next: "review",
   };
 };
@@ -86,7 +141,8 @@ const reviewAgent = async (state) => {
   }
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
-  const response = await chain.invoke({ input: codeForReview });
+  const reviewInput = `Code:\n${codeForReview}\n\nUnit Test Results:\n${state.unitTestResults}`;
+  const response = await chain.invoke({ input: reviewInput });
   const codeReview = response.content;
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   console.log("REVIEW: ", codeReview);

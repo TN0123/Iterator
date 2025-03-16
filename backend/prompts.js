@@ -112,10 +112,24 @@ const revisePrompt = `
     Respond with only the structured diff blocks without additional explanations.
 `;
 
+const unitTestPrompt = `
+    You are a developer who is pair programming with another developer.
+    You have been given this code by the other developer and the following
+    instructions by the client. Write a series of command-line commands to unit test the other developers code. Ensure that
+    your tests are exhaustive and adequatly test the code to ensure it follows
+    the clients instructions. If there is no way to unit test the code, respond with the
+    following phrase exactly: Cannot unit-test. Otherwise, ONLY respond with exact command-line commands to be put in a bash shell (i.e no other code), 
+    seperated by a new-line, without any additional comments. Ensure your commands involve installing all necessary dependencies (assume no dependencies have been installed).
+    Code: {code}
+
+    Instructions: {input}
+`;
+
 module.exports = {
   instructPrompt,
   reviewPrompt,
   generatePrompt,
   revisePrompt,
   generateWithErrorPrompt,
+  unitTestPrompt
 };
