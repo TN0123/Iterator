@@ -19,7 +19,9 @@ const startContainer = async () => {
     );
 
     await new Promise((resolve, reject) => {
-      docker.modem.followProgress(stream, (err, res) => (err ? reject(err) : resolve(res)));
+      docker.modem.followProgress(stream, (err, res) =>
+        err ? reject(err) : resolve(res)
+      );
     });
 
     console.log("Docker image built successfully.");
@@ -32,10 +34,7 @@ const startContainer = async () => {
   const container = await docker.createContainer({
     Image: imageName, // Use the custom image
     Tty: true,
-    Cmd: ["/bin/bash"], // Default to an interactive bash shell
-    HostConfig: {
-      Binds: ["/tmp/codeStorage:/code"], // Mount volume for persistent storage
-    },
+    Cmd: ["/bin/bash", "-c", "mkdir -p /code && exec /bin/bash"],
   });
 
   await container.start();
@@ -43,7 +42,6 @@ const startContainer = async () => {
 
   return container;
 };
-
 
 const cleanUpContainer = async (container) => {
   await container.stop();

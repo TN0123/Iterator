@@ -46,7 +46,7 @@ workflow.addNode("instruct", agents.instructAgent);
 workflow.addNode("generate", agents.generateAgent);
 workflow.addNode("review", agents.reviewAgent);
 workflow.addNode("revise", agents.reviseAgent);
-workflow.addNode("unit_test", agents.uni);
+workflow.addNode("unit_test", agents.unitTestingAgent);
 
 // Set the entry point
 workflow.addEdge(START, "instruct");
@@ -60,7 +60,11 @@ workflow.addEdge("instruct", "generate", (state) => state.next === "generate");
 workflow.addConditionalEdges("review", endOrRevise);
 workflow.addEdge("revise", "review", (state) => state.next === "review");
 workflow.addEdge("revise", END, (state) => state.next === "end");
-workflow.addEdge("generate", "unit_test", (state) => state.next === "unit_test");
+workflow.addEdge(
+  "generate",
+  "unit_test",
+  (state) => state.next === "unit_test"
+);
 workflow.addEdge("unit_test", "review", (state) => state.next === "review");
 
 // Compile the graph

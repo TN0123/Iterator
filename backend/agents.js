@@ -9,13 +9,13 @@ require("dotenv").config();
 
 // Initialize Models
 const ai_a = new ChatGoogleGenerativeAI({
-  modelName: "gemini-1.5-flash",
+  modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
   maxOutputTokens: 2048,
 });
 
 const ai_b = new ChatGoogleGenerativeAI({
-  modelName: "gemini-1.5-flash",
+  modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
   maxOutputTokens: 2048,
 });
@@ -29,7 +29,7 @@ const prompts = {
   generateWithError: ChatPromptTemplate.fromTemplate(
     promptValues.generateWithErrorPrompt
   ),
-  unitTesting: ChatPromptTemplate.fromTemplate(promptValues.unitTestPrompt)
+  unitTesting: ChatPromptTemplate.fromTemplate(promptValues.unitTestPrompt),
 };
 
 // Define Agents
@@ -75,49 +75,43 @@ const generateAgent = async (state) => {
 
 const unitTestingAgent = async (state) => {
   const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
-  const response = await chain.invoke({ input: state.instructions, code: state.currentCode });
-  const unitTestCommands = cleanCode(response.content);
+  const response = await chain.invoke({
+    input: state.instructions,
+    code: state.currentCode,
+  });
+  const unitTestCommands = utils.cleanCode(response.content);
   console.log(unitTestCommands);
-  const canUnitTest = !unitTestCommands.toLowerCase().includes("cannot unit-test");
+  const canUnitTest = !unitTestCommands
+    .toLowerCase()
+    .includes("cannot unit-test");
 
   if (!canUnitTest) {
-    return { state, canUnitTest, unitTestResults: "No unit tests applicable.", next: "review" };
+    return {
+      state,
+      canUnitTest,
+      unitTestResults: "No unit tests applicable.",
+      next: "review",
+    };
   }
 
-  // Parse the generated code into files
-  const files = parseGeneratedCode(state.currentCode);
+  // // Parse the generated code into files
+  // const files = utils.parseCodeFiles(state.currentCode);
 
-  // Start the Docker container
-  const container = await startContainer();
-  await writeFilesToContainer(container, files);
+  // // Start the Docker container
+  // const container = await docker.startContainer();
+  // await writeFilesToContainer(container, files);
 
-  const commands = unitTestCommands.split("\n").filter(cmd => cmd.trim() !== "");
+  const commands = unitTestCommands
+    .split("\n")
+    .filter((cmd) => cmd.trim() !== "");
   let output = "";
-  
+
   for (const cmd of commands) {
-    const exec = await container.exec({
-      AttachStdout: true,
-      AttachStderr: true,
-      Cmd: ["/bin/sh", "-c", cmd],
-      Tty: true,
-    });
-  
-    const stream = await exec.start({ hijack: true, stdin: true });
-  
-    let commandOutput = "";
-    stream.on("data", (chunk) => {
-      commandOutput += chunk.toString();
-    });
-  
-    await new Promise((resolve) => stream.on("end", resolve));
-  
-    output += `\nCommand: ${cmd}\nOutput:\n${commandOutput}\n`;
-  }  
+    const exec = await docker.execInContainer(state.container, cmd);
+    output += `\nCommand: ${cmd}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
+  }
 
   console.log("Unit Test Output:", output);
-
-  // Stop and clean up container
-  await cleanUpContainer(container);
 
   return {
     state,
@@ -189,4 +183,5 @@ module.exports = {
   generateAgent,
   reviewAgent,
   reviseAgent,
+  unitTestingAgent,
 };

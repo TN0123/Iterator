@@ -1,3 +1,6 @@
+const cleanCode = (code) =>
+  code.replace(/```[a-zA-Z]*/g, "").replace(/```/g, "");
+
 const parseCodeFiles = (codeText) => {
   const files = {};
   let currentFileName = null;
@@ -148,6 +151,7 @@ const parseDiffUpdates = async (diffText, container, currentFiles) => {
 };
 
 module.exports = {
+  cleanCode,
   parseCodeFiles,
   parseDiffUpdates,
 };
