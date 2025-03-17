@@ -9,29 +9,36 @@ require("dotenv").config();
 const docker = new Docker();
 
 const startContainer = async () => {
+  const imageName = "multi-environment";
+
+  try {
+    console.log("Building Docker image...");
+    const stream = await docker.buildImage(
+      { context: ".", src: ["Dockerfile"] },
+      { t: imageName }
+    );
+
+    await new Promise((resolve, reject) => {
+      docker.modem.followProgress(stream, (err, res) =>
+        err ? reject(err) : resolve(res)
+      );
+    });
+
+    console.log("Docker image built successfully.");
+  } catch (error) {
+    console.error("Error building Docker image:", error);
+    throw error;
+  }
+
+  // Create and start the container from the built image
   const container = await docker.createContainer({
-    Image: "ubuntu",
+    Image: imageName, // Use the custom image
     Tty: true,
     Cmd: ["/bin/bash", "-c", "mkdir -p /code && exec /bin/bash"],
   });
-  await container.start();
 
-  container.logs(
-    {
-      follow: true,
-      stdout: true,
-      stderr: true,
-    },
-    (err, stream) => {
-      if (err) {
-        console.error("Error getting container logs:", err);
-        return;
-      }
-      stream.on("data", (chunk) => {
-        console.log(chunk.toString());
-      });
-    }
-  );
+  await container.start();
+  console.log("Container started.");
 
   return container;
 };

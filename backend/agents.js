@@ -9,13 +9,13 @@ require("dotenv").config();
 
 // Initialize Models
 const ai_a = new ChatGoogleGenerativeAI({
-  modelName: "gemini-1.5-flash",
+  modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
   maxOutputTokens: 2048,
 });
 
 const ai_b = new ChatGoogleGenerativeAI({
-  modelName: "gemini-1.5-flash",
+  modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
   maxOutputTokens: 2048,
 });
@@ -29,6 +29,7 @@ const prompts = {
   generateWithError: ChatPromptTemplate.fromTemplate(
     promptValues.generateWithErrorPrompt
   ),
+  unitTesting: ChatPromptTemplate.fromTemplate(promptValues.unitTestPrompt),
 };
 
 // Define Agents
@@ -68,6 +69,54 @@ const generateAgent = async (state) => {
     currentCode: code,
     codeFiles,
     llmBOutput: (state.llmBOutput || []).concat([code]),
+    next: "unit_test",
+  };
+};
+
+const unitTestingAgent = async (state) => {
+  const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
+  const response = await chain.invoke({
+    input: state.instructions,
+    code: state.currentCode,
+  });
+  const unitTestCommands = utils.cleanCode(response.content);
+  console.log(unitTestCommands);
+  const canUnitTest = !unitTestCommands
+    .toLowerCase()
+    .includes("cannot unit-test");
+
+  if (!canUnitTest) {
+    return {
+      state,
+      canUnitTest,
+      unitTestResults: "No unit tests applicable.",
+      next: "review",
+    };
+  }
+
+  // // Parse the generated code into files
+  // const files = utils.parseCodeFiles(state.currentCode);
+
+  // // Start the Docker container
+  // const container = await docker.startContainer();
+  // await writeFilesToContainer(container, files);
+
+  const commands = unitTestCommands
+    .split("\n")
+    .filter((cmd) => cmd.trim() !== "");
+  let output = "";
+
+  for (const cmd of commands) {
+    const exec = await docker.execInContainer(state.container, cmd);
+    output += `\nCommand: ${cmd}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
+  }
+
+  console.log("Unit Test Output:", output);
+
+  return {
+    state,
+    canUnitTest,
+    unitTestResults: output,
     next: "review",
   };
 };
@@ -86,7 +135,8 @@ const reviewAgent = async (state) => {
   }
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
-  const response = await chain.invoke({ input: codeForReview });
+  const reviewInput = `Code:\n${codeForReview}\n\nUnit Test Results:\n${state.unitTestResults}`;
+  const response = await chain.invoke({ input: reviewInput });
   const codeReview = response.content;
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   console.log("REVIEW: ", codeReview);
@@ -133,4 +183,5 @@ module.exports = {
   generateAgent,
   reviewAgent,
   reviseAgent,
+  unitTestingAgent,
 };
