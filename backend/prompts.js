@@ -21,6 +21,8 @@ const instructPrompt = `
 
 const reviewPrompt = `
     You are a senior code reviewer performing a detailed analysis of submitted code.
+    The code has been run against some unit tests and you are provided with their results.
+    Note that the unit tests might not be comprehensive and could have missed some edge cases.
     
     Conduct a comprehensive review focusing on:
     1) Functional correctness - Does the code fulfill all requirements?
@@ -32,11 +34,11 @@ const reviewPrompt = `
     For each issue found:
     - Specify the exact file and location
     - Explain precisely what's wrong
-    - Suggest a specific fix when possible
     
-    If no issues are found after thorough examination, respond with exactly: "The code is correct."
+    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
+    DO NOT include the phrase "the code is correct" otherwise.
     
-    Code: {input}
+    {input}
 `;
 
 const generatePrompt = `
@@ -82,54 +84,78 @@ const generateWithErrorPrompt = `
 
 const revisePrompt = `
     You are a methodical software developer making precise code revisions based on review feedback.
-    
-    FEEDBACK:
-    {input}
-    
-    Follow these guidelines for surgical code changes:
-    
-    1) Create structured diff blocks for each modification:
-    
-    CHANGE [type: replace|insert|delete]
-    FILE: [filename.ext]
-    TARGET [location: line-numbers OR identifier: function/class/variable name]
-    CONTEXT [3-5 lines surrounding the change point to ensure proper location]
-    OLD:
-    \`\`\`
-    // Exact code to be replaced or deleted (omit for inserts)
-    \`\`\`
-    NEW:
-    \`\`\`
-    // Exact code to insert or replace (omit for deletes)
-    \`\`\`
-    END_CHANGE
-    
-    2) Ensure each change directly addresses a specific feedback point
-    3) Make minimal changes needed to fix issues (avoid rewriting unrelated code)
-    4) For complex changes across multiple files, organize changes by file
-    
+    Your task is to:
+    1. Analyze the original file content that you earlier generated
+    2. Understand the requested changes for each file
+    3. Generate a unified diff in the exact format used by tools like 'git diff' for each file
+
+    The diff should:
+    - Include chunk headers in the format: @@ -originalStart,originalCount +newStart,newCount @@
+    - Use lines starting with '-' to indicate removals
+    - Use lines starting with '+' to indicate additions
+    - Use lines starting with ' ' (space) to provide context (unchanged lines)
+    - Include enough context lines before and after changes (usually 3 lines)
+
+    Example Output Format:
+
+    FILE: example.py
+
+    DIFF:
+    @@ -1,5 +1,6 @@
+    // Unchanged line for context
+    -// This line will be removed
+    +// This line will be added instead
+    +// This is a completely new line
+    // Another unchanged line for context
+
+    FILE: another.py
+
+    DIFF:
+    @@ -10,3 +10,4 @@
+    // Some unchanged line
+    // Another unchanged line
+    -// Removing this line
+    +// Adding this line
+    // Another unchanged line for context
+
+    Make sure the diff is complete and accurate, accounting for all line number changes when multiple modifications are made.
+
     Focus on precision - your changes will be applied programmatically.
     Respond with only the structured diff blocks without additional explanations.
+
+    Here is the feedback:
+    {input}
 `;
 
 const unitTestPrompt = `
-    You are a developer who is pair programming with another developer.
-    You have been given this code by the other developer and the following
-    instructions by the client. Write a series of command-line commands to unit test the other developers code. Ensure that
-    your tests are exhaustive and adequatly test the code to ensure it follows
-    the clients instructions. If there is no way to unit test the code, respond with the
-    following phrase exactly: Cannot unit-test. Otherwise, ONLY respond with exact command-line commands to be put in a bash shell (i.e no other code), 
-    seperated by a new-line, without any additional comments. Ensure your commands involve installing all necessary dependencies (assume no dependencies have been installed).
-    Code: {code}
+    You are meticulous testing engineer responsible for ensuring the reliability of someone else's written code.
+    You are provided with a code file that already exists.
+    
+    Your task is to generate a file with comprehensive unit test cases for the provided code as well as 
+    commands to run the testing file and see the test cases through a series of exact bash commands. You must:
+    1. Run cd /code to change to the correct directory
+    2. Create a test file and run the file
+    3. Rely on built-in unit testing frameworks and cannot use commands to install additional packages
+    4. Create test cases based on what the instructions were, NOT how the code is implemented
+    5. Do not run python3 -m unittest commands, only run the test file directly
+    
+    Output Format:
+    - Output **only the bash commands**, newline-separated, no explanations
+    - Ensure proper indentation in generated Python code
+    - Use "python3" instead of "python" for compatibility
+    - If unit testing is not possible or necessary, respond with exactly: **cannot unit-test**
 
-    Instructions: {input}
+    Code:
+    {code}
+
+    Instructions:
+    {input}
 `;
-
 module.exports = {
   instructPrompt,
   reviewPrompt,
   generatePrompt,
   revisePrompt,
   generateWithErrorPrompt,
-  unitTestPrompt
+  unitTestPrompt,
 };

@@ -157,7 +157,7 @@ const deleteFile = async (container, filePath) => {
  * @returns {Promise<{stdout: string, stderr: string}>} - Command execution results
  */
 const execInContainer = async (container, command) => {
-  console.log("EXECUTING COMMAND: ", command);
+  //console.log("EXECUTING COMMAND: ", command);
 
   const exec = await container.exec({
     Cmd: ["bash", "-c", command],
