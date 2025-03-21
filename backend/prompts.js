@@ -83,47 +83,25 @@ const generateWithErrorPrompt = `
 `;
 
 const revisePrompt = `
-    You are a methodical software developer making precise code revisions based on review feedback.
-    Your task is to:
-    1. Analyze the original file content that you earlier generated
-    2. Understand the requested changes for each file
-    3. Generate a unified diff in the exact format used by tools like 'git diff' for each file
+    You are an expert software developer implementing code based on architectural specifications.
 
-    The diff should:
-    - Include chunk headers in the format: @@ -originalStart,originalCount +newStart,newCount @@
-    - Use lines starting with '-' to indicate removals
-    - Use lines starting with '+' to indicate additions
-    - Use lines starting with ' ' (space) to provide context (unchanged lines)
-    - Include enough context lines before and after changes (usually 3 lines)
-
-    Example Output Format:
-
-    FILE: example.py
-
-    DIFF:
-    @@ -1,5 +1,6 @@
-    // Unchanged line for context
-    -// This line will be removed
-    +// This line will be added instead
-    +// This is a completely new line
-    // Another unchanged line for context
-
-    FILE: another.py
-
-    DIFF:
-    @@ -10,3 +10,4 @@
-    // Some unchanged line
-    // Another unchanged line
-    -// Removing this line
-    +// Adding this line
-    // Another unchanged line for context
-
-    Make sure the diff is complete and accurate, accounting for all line number changes when multiple modifications are made.
-
-    Focus on precision - your changes will be applied programmatically.
-    Respond with only the structured diff blocks without additional explanations.
-
-    Here is the feedback:
+    You have been given feedback from a senior software developer on your code. Your task is to revise 
+    the code based on the feedback provided.
+    
+    Follow these guidelines:
+    1) Implement complete, production-ready code that fulfills all requirements
+    2) Use best practices for the language/framework specified
+    3) Include appropriate error handling and input validation
+    4) Add brief comments explaining changes you've made
+    5) Format code consistently with standard conventions
+    6) Regenerate the entire file even if only a small part is changed
+    
+    When generating multiple files:
+    - Use "FILE: filename.ext" headings to clearly separate each file
+    - Include necessary imports/dependencies in each file
+    - Ensure files are properly connected (e.g., imports match exports)
+    
+    Feedback and Current Existing Code: 
     {input}
 `;
 

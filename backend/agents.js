@@ -37,6 +37,7 @@ const prompts = {
 // Define Agents
 const instructAgent = async (state) => {
   // console.log("INSTRUCT AGENT STATE:", state);
+  console.log("INSTRUCT STEP");
   const chain = RunnableSequence.from([prompts.instruct, ai_a]);
   const response = await chain.invoke({ input: state.task });
   const instructions = response.content;
@@ -52,6 +53,7 @@ const instructAgent = async (state) => {
 
 const generateAgent = async (state) => {
   // console.log("GENERATE AGENT STATE:", state);
+  console.log("GENERATE STEP");
   const chain = RunnableSequence.from([prompts.generateWithError, ai_b]);
   const response = await chain.invoke({ input: state.instructions });
   const code = response.content;
@@ -59,7 +61,7 @@ const generateAgent = async (state) => {
 
   // Parse code into files
   const codeFiles = utils.parseCodeFiles(code);
-  // console.log("CODE FILES: ", codeFiles);
+  console.log("CODE FILES: ", codeFiles);
 
   // Save files to Docker container
   for (const [filename, content] of Object.entries(codeFiles)) {
@@ -69,7 +71,7 @@ const generateAgent = async (state) => {
   return {
     state,
     currentCode: code,
-    codeFiles,
+    codeFiles: codeFiles,
     llmBOutput: (state.llmBOutput || []).concat([code]),
     next: "unit_test",
   };
@@ -77,6 +79,7 @@ const generateAgent = async (state) => {
 
 const unitTestingAgent = async (state) => {
   // console.log("UNIT TESTING AGENT STATE:", state);
+  console.log("UNIT TESTING STEP");
   const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
   const response = await chain.invoke({
     input: state.instructions,
@@ -116,6 +119,7 @@ const unitTestingAgent = async (state) => {
 
 const reviewAgent = async (state) => {
   // console.log("REVIEW AGENT STATE:", state);
+  console.log("REVIEW STEP");
 
   const fileList = await docker.listFiles(state.container);
   // console.log("FILES: ", fileList);
@@ -132,11 +136,11 @@ const reviewAgent = async (state) => {
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
   const reviewInput = `Code:\n${codeForReview}\n\nUnit Test Results:\n${state.unitTestResults}`;
-  console.log("REVIEW INPUT: ", reviewInput);
+  // console.log("REVIEW INPUT: ", reviewInput);
   const response = await chain.invoke({ input: reviewInput });
   const codeReview = response.content;
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
-  console.log("REVIEW: ", codeReview);
+  // console.log("REVIEW: ", codeReview);
 
   return {
     state,
@@ -148,58 +152,22 @@ const reviewAgent = async (state) => {
 
 const reviseAgent = async (state) => {
   //console.log("REVISE AGENT STATE:", state);
+  console.log("REVISE STEP");
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
-  const response = await chain.invoke({ input: state.codeReview });
-  const revisionDiff = response.content;
-  console.log("REVISION: ", revisionDiff);
-
-  const fileDiffs = utils.parseDiffResponse(revisionDiff);
-
-  const fileList = await docker.listFiles(state.container);
-  const updatedFiles = {};
-
-  for (const [filename, diffContent] of Object.entries(fileDiffs)) {
-    try {
-      // Read the original file content
-      const originalContent = await docker.readFile(state.container, filename);
-      //console.log("ORIGINAL CONTENT: ", originalContent);
-      // Apply the diff to get updated content
-      const updatedContent = utils.applyDiff(originalContent, diffContent);
-      //console.log("UPDATED CONTENT: ", updatedContent);
-
-      // Store the updated content
-      updatedFiles[filename] = updatedContent;
-
-      // Update file in Docker container
-      await docker.createOrUpdateFile(
-        state.container,
-        filename,
-        updatedContent
-      );
-    } catch (error) {
-      console.error(`Error updating file ${filename}: ${error.message}`);
-      // Handle case where file might be new
-      if (error.message.includes("not found") || error.code === "ENOENT") {
-        // For new files, extract content from the diff
-        const newFileContent = utils.extractNewFileContent(diffContent);
-        if (newFileContent) {
-          updatedFiles[filename] = newFileContent;
-          await docker.createOrUpdateFile(
-            state.container,
-            filename,
-            newFileContent
-          );
-        }
-      }
-    }
+  const reviseInput = `Code Review:\n${state.codeReview}\n\nCurrent Code:\n${state.currentCode}`;
+  console.log("REVISE INPUT: ", reviseInput);
+  const response = await chain.invoke({ input: reviseInput });
+  const code = response.content;
+  const codeFiles = utils.parseCodeFiles(code);
+  for (const [filename, content] of Object.entries(codeFiles)) {
+    await docker.createOrUpdateFile(state.container, filename, content);
   }
-
-  // console.log("UPDATED FILES: ", updatedFiles);
+  console.log("REVISED CODE: ", code);
 
   return {
     ...state,
-    codeFiles: updatedFiles,
-    llmBOutput: (state.llmBOutput || []).concat([revisionDiff]),
+    currentCode: code,
+    llmBOutput: (state.llmBOutput || []).concat("Changes applied."),
     iterations: (state.iterations || 0) + 1,
     unitTestResults: "No unit tests applicable.",
     next: "review",
