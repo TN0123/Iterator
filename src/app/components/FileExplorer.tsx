@@ -54,7 +54,7 @@ export default function FileExplorer({ containerId }: FileExplorerProps) {
       {/* File List */}
       <div className="w-1/4 overflow-y-auto border-r p-2">
         <h2 className="font-bold mb-2">
-          Files
+          Files<span>  -  </span>
           <button onClick={handleDownloadZip} className="hover:text-blue-600">
             <Download className="w-5 h-5" />
           </button>
