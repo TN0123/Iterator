@@ -4,7 +4,7 @@ const workflow = require("./workflow");
 const docker = require("./docker");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs").promises;
+const fspromises = require("fs").promises;
 
 require("dotenv").config();
 
@@ -129,13 +129,13 @@ app.post("/api/upload", upload.array("files"), async (req, res) => {
     // Process each uploaded file
     for (const file of req.files) {
       const relativePath = file.originalname.replace(/^[\/\\]/, ""); // Changed originalpath to originalname
-      const content = await fs.readFile(file.path, "utf-8");
+      const content = await fspromises.readFile(file.path, "utf-8");
 
       // Create the file in the container
       await docker.createOrUpdateFile(container, relativePath, content);
 
       // Clean up the temporary file
-      await fs.unlink(file.path);
+      await fspromises.unlink(file.path);
     }
 
     res.json({
