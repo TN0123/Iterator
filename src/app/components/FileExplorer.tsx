@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy } from "lucide-react";
+import { Download, Copy } from "lucide-react";
 
 interface FileExplorerProps {
   containerId: string;
@@ -39,11 +39,26 @@ export default function FileExplorer({ containerId }: FileExplorerProps) {
     }
   };
 
+  const handleDownloadZip = () => {
+    const zipUrl = `http://localhost:3001/api/container/${containerId}/download-zip`;
+    const link = document.createElement("a");
+    link.href = zipUrl;
+    link.setAttribute("download", `${containerId}.zip`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex h-full border rounded-md shadow-lg p-4">
       {/* File List */}
       <div className="w-1/4 overflow-y-auto border-r p-2">
-        <h2 className="font-bold mb-2">Files</h2>
+        <h2 className="font-bold mb-2">
+          Files
+          <button onClick={handleDownloadZip} className="hover:text-blue-600">
+            <Download className="w-5 h-5" />
+          </button>
+        </h2>
         <ul>
           {files.map((file) => (
             <li
