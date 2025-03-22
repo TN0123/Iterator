@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const workflow = require("./workflow");
 const docker = require("./docker");
+const multer = require("multer");
+const fspromises = require("fs").promises;
 const path = require("path");
 const archiver = require("archiver");
 const os = require("os");
@@ -25,6 +27,17 @@ const getOrCreateContainer = async () => {
   }
   return activeContainer;
 };
+
+const initializeContainer = async () => {
+  try {
+    await getOrCreateContainer();
+  } catch (error) {
+    console.error("Error initializing container:", error);
+  }
+};
+
+// Add multer configuration
+const upload = multer({ dest: "uploads/" });
 
 // API endpoints
 app.post("/api/chat", async (req, res) => {
@@ -106,6 +119,40 @@ app.get("/api/container/:containerId/file", async (req, res) => {
   }
 });
 
+// Add new endpoint for file uploads
+app.post("/api/upload", upload.array("files"), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No files uploaded" });
+    }
+
+    const container = await getOrCreateContainer();
+
+    // Process each uploaded file
+    for (const file of req.files) {
+      const relativePath = file.originalname.replace(/^[\/\\]/, ""); // Changed originalpath to originalname
+      const content = await fspromises.readFile(file.path, "utf-8");
+
+      // Create the file in the container
+      await docker.createOrUpdateFile(container, relativePath, content);
+
+      // Clean up the temporary file
+      await fspromises.unlink(file.path);
+    }
+
+    res.json({
+      success: true,
+      message: "Files uploaded successfully",
+      containerId: container.id,
+    });
+  } catch (error) {
+    console.error("Error handling file upload:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.get("/api/container/:containerId/download-zip", async (req, res) => {
   const { containerId } = req.params;
 
@@ -116,35 +163,44 @@ app.get("/api/container/:containerId/download-zip", async (req, res) => {
   }
   fs.mkdirSync(tempDir, { recursive: true });
 
-  const containerPath = "/code"; 
+  const containerPath = "/code";
 
   // Execute docker cp to copy files from the container to the host
-  exec(`docker cp ${containerId}:${containerPath} ${tempDir}`, (err, stdout, stderr) => {
-    if (err) {
-      console.error("Error copying files from container:", stderr);
-      return res.status(500).json({ error: "Failed to copy files from container" });
+  exec(
+    `docker cp ${containerId}:${containerPath} ${tempDir}`,
+    (err, stdout, stderr) => {
+      if (err) {
+        console.error("Error copying files from container:", stderr);
+        return res
+          .status(500)
+          .json({ error: "Failed to copy files from container" });
+      }
+
+      console.log("Files copied to:", tempDir);
+
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=${containerId}.zip`
+      );
+
+      const archive = archiver("zip", { zlib: { level: 9 } });
+
+      archive.on("error", (err) => {
+        console.error("Archiver error:", err);
+        res.status(500).json({ error: err.message });
+      });
+
+      archive.pipe(res);
+      archive.directory(tempDir, false);
+
+      archive.finalize();
     }
-
-    console.log("Files copied to:", tempDir);
-
-    res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename=${containerId}.zip`);
-
-    const archive = archiver("zip", { zlib: { level: 9 } });
-
-    archive.on("error", (err) => {
-      console.error("Archiver error:", err);
-      res.status(500).json({ error: err.message });
-    });
-
-    archive.pipe(res);
-    archive.directory(tempDir, false);
-
-    archive.finalize();
-  });
+  );
 });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  initializeContainer();
 });

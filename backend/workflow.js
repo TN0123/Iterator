@@ -36,6 +36,9 @@ const graphStateChannels = {
   codeFiles: {
     value: (prevFiles, files) => files,
   },
+  unitTestResults: {
+    value: (prevResults, results) => results,
+  },
 };
 
 // Create workflow graph

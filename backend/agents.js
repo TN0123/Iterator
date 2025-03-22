@@ -24,7 +24,9 @@ const ai_b = new ChatGoogleGenerativeAI({
 const prompts = {
   instruct: ChatPromptTemplate.fromTemplate(promptValues.instructPrompt),
   review: ChatPromptTemplate.fromTemplate(promptValues.reviewPrompt),
-  generate: ChatPromptTemplate.fromTemplate(promptValues.generatePrompt),
+  generate: ChatPromptTemplate.fromTemplate(
+    promptValues.generateWithErrorPrompt
+  ),
   revise: ChatPromptTemplate.fromTemplate(promptValues.revisePrompt),
   generateWithError: ChatPromptTemplate.fromTemplate(
     promptValues.generateWithErrorPrompt
@@ -35,10 +37,11 @@ const prompts = {
 // Define Agents
 const instructAgent = async (state) => {
   // console.log("INSTRUCT AGENT STATE:", state);
+  console.log("INSTRUCT STEP");
   const chain = RunnableSequence.from([prompts.instruct, ai_a]);
   const response = await chain.invoke({ input: state.task });
   const instructions = response.content;
-  console.log("INSTRUCTIONS: ", instructions);
+  // console.log("INSTRUCTIONS: ", instructions);
 
   return {
     state,
@@ -50,10 +53,11 @@ const instructAgent = async (state) => {
 
 const generateAgent = async (state) => {
   // console.log("GENERATE AGENT STATE:", state);
-  const chain = RunnableSequence.from([prompts.generate, ai_b]);
+  console.log("GENERATE STEP");
+  const chain = RunnableSequence.from([prompts.generateWithError, ai_b]);
   const response = await chain.invoke({ input: state.instructions });
   const code = response.content;
-  console.log("GENERATED CODE: ", code);
+  // console.log("GENERATED CODE: ", code);
 
   // Parse code into files
   const codeFiles = utils.parseCodeFiles(code);
@@ -67,20 +71,24 @@ const generateAgent = async (state) => {
   return {
     state,
     currentCode: code,
-    codeFiles,
+    codeFiles: codeFiles,
     llmBOutput: (state.llmBOutput || []).concat([code]),
     next: "unit_test",
   };
 };
 
 const unitTestingAgent = async (state) => {
+  // console.log("UNIT TESTING AGENT STATE:", state);
+  console.log("UNIT TESTING STEP");
   const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
   const response = await chain.invoke({
     input: state.instructions,
     code: state.currentCode,
   });
+
   const unitTestCommands = utils.cleanCode(response.content);
-  console.log(unitTestCommands);
+  // console.log("UNIT TEST COMMANDS: ", unitTestCommands);
+  // console.log("END OF CONSOLE.LOG");
   const canUnitTest = !unitTestCommands
     .toLowerCase()
     .includes("cannot unit-test");
@@ -94,24 +102,12 @@ const unitTestingAgent = async (state) => {
     };
   }
 
-  // // Parse the generated code into files
-  // const files = utils.parseCodeFiles(state.currentCode);
-
-  // // Start the Docker container
-  // const container = await docker.startContainer();
-  // await writeFilesToContainer(container, files);
-
-  const commands = unitTestCommands
-    .split("\n")
-    .filter((cmd) => cmd.trim() !== "");
   let output = "";
 
-  for (const cmd of commands) {
-    const exec = await docker.execInContainer(state.container, cmd);
-    output += `\nCommand: ${cmd}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
-  }
+  const exec = await docker.execInContainer(state.container, unitTestCommands);
+  output += `\nCommand:\n${unitTestCommands}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
 
-  console.log("Unit Test Output:", output);
+  // console.log("UNIT TEST OUTPUT:", output);
 
   return {
     state,
@@ -123,23 +119,28 @@ const unitTestingAgent = async (state) => {
 
 const reviewAgent = async (state) => {
   // console.log("REVIEW AGENT STATE:", state);
+  console.log("REVIEW STEP");
 
   const fileList = await docker.listFiles(state.container);
-  console.log("FILES: ", fileList);
+  // console.log("FILES: ", fileList);
   let codeForReview = "";
 
   // Read each file and format for review
   for (const file of fileList) {
+    if (file.endsWith(".pyc") || file.includes("test")) {
+      continue;
+    }
     const content = await docker.readFile(state.container, file);
     codeForReview += `FILE: ${file}\n${content}\n\n`;
   }
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
   const reviewInput = `Code:\n${codeForReview}\n\nUnit Test Results:\n${state.unitTestResults}`;
+  // console.log("REVIEW INPUT: ", reviewInput);
   const response = await chain.invoke({ input: reviewInput });
   const codeReview = response.content;
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
-  console.log("REVIEW: ", codeReview);
+  // console.log("REVIEW: ", codeReview);
 
   return {
     state,
@@ -151,29 +152,24 @@ const reviewAgent = async (state) => {
 
 const reviseAgent = async (state) => {
   //console.log("REVISE AGENT STATE:", state);
-
+  console.log("REVISE STEP");
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
-  const response = await chain.invoke({ input: state.codeReview });
-  const revisionDiff = response.content;
-  console.log("REVISION: ", revisionDiff);
-
-  // Apply the diff changes to the files
-  const updatedFiles = await utils.parseDiffUpdates(
-    revisionDiff,
-    state.container,
-    state.codeFiles
-  );
-
-  // Update files in Docker container
-  for (const [filename, content] of Object.entries(updatedFiles)) {
+  const reviseInput = `Code Review:\n${state.codeReview}\n\nCurrent Code:\n${state.currentCode}`;
+  console.log("REVISE INPUT: ", reviseInput);
+  const response = await chain.invoke({ input: reviseInput });
+  const code = response.content;
+  const codeFiles = utils.parseCodeFiles(code);
+  for (const [filename, content] of Object.entries(codeFiles)) {
     await docker.createOrUpdateFile(state.container, filename, content);
   }
+  console.log("REVISED CODE: ", code);
 
   return {
     ...state,
-    codeFiles: updatedFiles,
-    llmBOutput: (state.llmBOutput || []).concat([revisionDiff]),
+    currentCode: code,
+    llmBOutput: (state.llmBOutput || []).concat("Changes applied."),
     iterations: (state.iterations || 0) + 1,
+    unitTestResults: "No unit tests applicable.",
     next: "review",
   };
 };
