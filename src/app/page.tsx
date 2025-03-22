@@ -9,6 +9,13 @@ import "prismjs/plugins/autoloader/prism-autoloader";
 import { Copy, RefreshCw } from "lucide-react";
 import FileExplorer from "./components/FileExplorer";
 
+declare module "react" {
+  interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+    webkitdirectory?: string;
+    directory?: string;
+  }
+}
+
 interface Message {
   type: "user" | "llmA" | "llmB";
   content: string;
@@ -30,6 +37,7 @@ export default function Home() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [containerId, setContainerId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const clearContainer = async () => {
     if (
@@ -127,20 +135,70 @@ export default function Home() {
     }
   };
 
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (!event.target.files || event.target.files.length === 0) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+
+    Array.from(event.target.files).forEach((file) => {
+      formData.append("files", file);
+    });
+
+    try {
+      const response = await fetch("http://localhost:3001/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert("Files uploaded successfully!");
+        if (data.containerId) {
+          setContainerId(data.containerId);
+        }
+      } else {
+        alert(`Upload failed: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Error uploading files:", error);
+      alert("Error uploading files. See console for details.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="flex bg-gray-200 justify-center items-center h-screen">
       <div className="w-2/5 mx-2 p-4 bg-white shadow-lg rounded-lg flex flex-col h-[80vh] border border-gray-200">
         <h1 className="text-2xl font-bold mb-4">Multi-Agent Code Generation</h1>
-        <button
-          onClick={clearContainer}
-          disabled={isClearing || !containerId}
-          className="flex items-center gap-2 px-4 py-2 w-1/5 my-2 bg-red-500 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 transition"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${isClearing ? "animate-spin" : ""}`}
-          />
-          {isClearing ? "Clearing..." : "Clear"}
-        </button>
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={clearContainer}
+            disabled={isClearing || !containerId}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 transition"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isClearing ? "animate-spin" : ""}`}
+            />
+            {isClearing ? "Clearing..." : "Clear"}
+          </button>
+
+          <label className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition cursor-pointer">
+            <input
+              type="file"
+              webkitdirectory="true"
+              directory=""
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+              disabled={isUploading}
+            />
+            {isUploading ? "Uploading..." : "Upload Codebase"}
+          </label>
+        </div>
         <div
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300"
