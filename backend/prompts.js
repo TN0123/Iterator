@@ -20,9 +20,10 @@ const instructPrompt = `
 `;
 
 const reviewPrompt = `
-    You are a senior code reviewer performing a detailed analysis of submitted code.
-    The code has been run against some unit tests and you are provided with their results.
-    Note that the unit tests might not be comprehensive and could have missed some edge cases.
+    You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
+    The code has been run against some unit tests that were created by a different testing engineer and you are provided 
+    with their results. You do not have access to the unit tests themselves, only the results. Note that the unit tests 
+    might not be comprehensive and could have missed some edge cases.
     
     Conduct a comprehensive review focusing on:
     1) Functional correctness - Does the code fulfill all requirements?
