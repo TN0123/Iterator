@@ -16,14 +16,11 @@ const instructPrompt = `
     Be specific about architecture but allow flexibility in implementation details. Prioritize clarity and maintainability over brevity.
     Keep instructions under 200 words and use bullet points or numbered lists where appropriate.
     
-    Task: {input}
+    Task: {task}
 `;
 
 const reviewPrompt = `
     You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
-    The code has been run against some unit tests that were created by a different testing engineer and you are provided 
-    with their results. You do not have access to the unit tests themselves, only the results. Note that the unit tests 
-    might not be comprehensive and could have missed some edge cases.
     
     Conduct a comprehensive review focusing on:
     1) Functional correctness - Does the code fulfill all requirements?
@@ -39,7 +36,8 @@ const reviewPrompt = `
     If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
     DO NOT include the phrase "the code is correct" otherwise.
     
-    {input}
+    Here is the code:
+    {code}
 `;
 
 const generatePrompt = `
@@ -59,7 +57,7 @@ const generatePrompt = `
     
     Respond with only the code and file labels without additional explanations.
     
-    Instructions: {input}
+    Instructions: {instructions}
 `;
 
 const generateWithErrorPrompt = `
@@ -102,8 +100,11 @@ const revisePrompt = `
     - Include necessary imports/dependencies in each file
     - Ensure files are properly connected (e.g., imports match exports)
     
-    Feedback and Current Existing Code: 
-    {input}
+    Feedback:
+    {review}
+
+    Current Code:
+    {code}
 `;
 
 const unitTestPrompt = `
