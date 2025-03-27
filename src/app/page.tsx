@@ -34,6 +34,7 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [history, setHistory] = useState<Message[]>([]);
   const [summary, setSummary] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"markdown" | "chat">("markdown");
 
   const clearContainer = async () => {
     if (
@@ -156,8 +157,29 @@ export default function Home() {
   return (
     <div className="flex bg-gray-200 justify-center items-center h-screen">
       <div className="w-2/5 mx-2 p-4 bg-white shadow-lg rounded-lg flex flex-col h-[80vh] border border-gray-200">
-        <h1 className="text-2xl font-bold mb-4">Iterator</h1>
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 items-center justify-between">
+          <div>
+            <button
+              className={`py-2 px-4 ${
+                activeTab === "markdown"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-200"
+              }`}
+              onClick={() => setActiveTab("markdown")}
+            >
+              Documentation
+            </button>
+
+            <button
+              className={`py-2 px-4 ${
+                activeTab === "chat" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
+              onClick={() => setActiveTab("chat")}
+            >
+              Chat History
+            </button>
+          </div>
+
           <button
             onClick={clearContainer}
             disabled={isClearing || !containerId}
@@ -182,26 +204,29 @@ export default function Home() {
             {isUploading ? "Uploading..." : "Upload Codebase"}
           </label>
         </div>
-        <div
-          ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300"
-        >
-          <ReactMarkdown
-            components={{
-              h1: ({ children }) => (
-                <h1 className="text-4xl font-bold">{children}</h1>
-              ),
-              h2: ({ children }) => (
-                <h2 className="text-3xl font-semibold">{children}</h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-2xl font-semibold">{children}</h3>
-              ),
-            }}
-          >
-            {summary}
-          </ReactMarkdown>
-          {/* <ChatHistory history={history} /> */}
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300">
+          {/* Tabs for switching */}
+          <div className="flex"></div>
+          {/* Conditionally render the active tab's content */}
+          {activeTab === "markdown" ? (
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => (
+                  <h1 className="text-4xl font-bold">{children}</h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="text-3xl font-semibold">{children}</h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="text-2xl font-semibold">{children}</h3>
+                ),
+              }}
+            >
+              {summary}
+            </ReactMarkdown>
+          ) : (
+            <ChatHistory history={history} />
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
