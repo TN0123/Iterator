@@ -42,9 +42,18 @@ const instructAgent = async (state) => {
   // console.log("INSTRUCT AGENT STATE:", state);
   console.log("INSTRUCT STEP");
 
+  const fileList = await docker.listFiles(state.container);
+  let currentCode = "";
+
+  for (const file of fileList) {
+    const content = await docker.readFile(state.container, file);
+    currentCode += `FILE: ${file}\n${content}\n\n`;
+  }
+
   const chain = RunnableSequence.from([prompts.instruct, ai_a]);
   const response = await chain.invoke({
     task: state.task,
+    code: currentCode,
   });
   const instructions = response.content;
   // console.log("INSTRUCTIONS: ", instructions);

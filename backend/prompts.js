@@ -17,6 +17,9 @@ const instructPrompt = `
     Keep instructions under 200 words and use bullet points or numbered lists where appropriate.
     
     Task: {task}
+
+    Current Code (might be empty):
+    {code}
 `;
 
 const reviewPrompt = `
