@@ -8,6 +8,8 @@ import "prismjs/components/prism-python";
 import "prismjs/plugins/autoloader/prism-autoloader";
 import { Copy, RefreshCw } from "lucide-react";
 import FileExplorer from "./components/FileExplorer";
+import ChatHistory from "./components/ChatHistory";
+import { Message } from "./components/ChatHistory";
 
 declare module "react" {
   interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
@@ -16,28 +18,19 @@ declare module "react" {
   }
 }
 
-interface Message {
-  type: "user" | "llmA" | "llmB";
-  content: string;
-}
-
 interface ChatResponse {
-  originalPrompt: string;
-  instructions: string;
-  finalCode: string;
-  llmAOutput: string[];
-  llmBOutput: string[];
-  containerId?: string;
+  history: Message[];
+  containerId: string;
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [containerId, setContainerId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [history, setHistory] = useState<Message[]>([]);
 
   const clearContainer = async () => {
     if (
@@ -64,7 +57,7 @@ export default function Home() {
 
       if (data.success) {
         setContainerId(null);
-        setMessages([]);
+        setHistory([]);
         alert("Container cleared successfully!");
       } else {
         alert(`Failed to clear container: ${data.message}`);
@@ -82,21 +75,25 @@ export default function Home() {
       top: chatContainerRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages]);
+  }, [history]);
 
   useEffect(() => {
     Prism.highlightAll();
-  }, [messages]);
+  }, [history]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    setIsLoading(true);
-    const userMessage: Message = { type: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    const userMessage: Message = {
+      agent: "USER",
+      message: input,
+    };
+
+    setHistory((prevHistory) => [...prevHistory, userMessage]);
 
     try {
+      setIsLoading(true);
       const response = await fetch("http://localhost:3001/api/chat", {
         method: "POST",
         headers: {
@@ -110,23 +107,7 @@ export default function Home() {
       if (data.containerId) {
         setContainerId(data.containerId);
       }
-
-      const maxLength = Math.max(
-        data.llmAOutput.length,
-        data.llmBOutput.length
-      );
-
-      const newMessages: Message[] = [];
-      for (let i = 0; i < maxLength; i++) {
-        if (i < data.llmAOutput.length) {
-          newMessages.push({ type: "llmA", content: data.llmAOutput[i] });
-        }
-        if (i < data.llmBOutput.length) {
-          newMessages.push({ type: "llmB", content: data.llmBOutput[i] });
-        }
-      }
-
-      setMessages((prev) => [...prev, ...newMessages]);
+      setHistory((prevHistory) => [...prevHistory, ...data.history]);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -173,7 +154,7 @@ export default function Home() {
   return (
     <div className="flex bg-gray-200 justify-center items-center h-screen">
       <div className="w-2/5 mx-2 p-4 bg-white shadow-lg rounded-lg flex flex-col h-[80vh] border border-gray-200">
-        <h1 className="text-2xl font-bold mb-4">Multi-Agent Code Generation</h1>
+        <h1 className="text-2xl font-bold mb-4">Iterator</h1>
         <div className="flex gap-2 mb-4">
           <button
             onClick={clearContainer}
@@ -203,45 +184,7 @@ export default function Home() {
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300"
         >
-          {messages.map((message, index) => {
-            let content = message.content.trim();
-            let language = "plaintext";
-            if (content.startsWith("```")) {
-              const lines = content.split("\n");
-              const firstLine = lines[0].trim().replace(/```/g, "");
-              if (firstLine) {
-                language = firstLine;
-              }
-              content = lines.slice(0).join("\n").trim();
-            }
-
-            return (
-              <div
-                key={index}
-                className={`p-3 rounded-lg text-white break-words ${
-                  message.type === "user"
-                    ? "bg-blue-600 self-end ml-auto max-w-[75%]"
-                    : message.type === "llmA"
-                    ? "bg-green-600 max-w-full"
-                    : "bg-purple-600 max-w-full"
-                }`}
-                style={{ wordWrap: "break-word", overflow: "hidden" }}
-              >
-                <div className="flex items-center mb-2">
-                  <h1>
-                    {message.type === "llmA"
-                      ? "Instructions AI"
-                      : message.type === "llmB"
-                      ? "Coder AI"
-                      : "You"}
-                  </h1>
-                </div>
-                <pre>
-                  <code className={`language-${language}`}>{content}</code>
-                </pre>
-              </div>
-            );
-          })}
+          <ChatHistory history={history} />
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 flex gap-2">

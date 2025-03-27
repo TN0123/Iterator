@@ -50,9 +50,11 @@ workflow.addNode("revise", agents.reviseAgent);
 // Set the entry point
 workflow.addEdge(START, "instruct");
 
+const MAXITERATIONS = 5;
+
 // conditional routing
 const endOrRevise = (state) =>
-  state.isCorrect || state.iterations > 3 ? END : "revise";
+  state.isCorrect || state.iterations > MAXITERATIONS ? END : "revise";
 
 // Add edges
 workflow.addEdge("instruct", "generate", (state) => state.next === "generate");

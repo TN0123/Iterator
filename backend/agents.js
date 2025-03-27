@@ -92,8 +92,7 @@ const generateAgent = async (state) => {
 
   return {
     state,
-    currentCode: code,
-    codeBase: codeFilesString,
+    codebase: codeFilesString,
     history: newHistory,
     next: "review",
   };
@@ -144,6 +143,8 @@ const reviewAgent = async (state) => {
   console.log("REVIEW STEP");
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
+
+  console.log("CODEBASE: ", state.codebase);
 
   const response = await chain.invoke({
     code: state.codebase,
