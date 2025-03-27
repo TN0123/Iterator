@@ -10,6 +10,7 @@ import { Copy, RefreshCw } from "lucide-react";
 import FileExplorer from "./components/FileExplorer";
 import ChatHistory from "./components/ChatHistory";
 import { Message } from "./components/ChatHistory";
+import ReactMarkdown from "react-markdown";
 
 declare module "react" {
   interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
@@ -21,6 +22,7 @@ declare module "react" {
 interface ChatResponse {
   history: Message[];
   containerId: string;
+  summary: string;
 }
 
 export default function Home() {
@@ -31,6 +33,7 @@ export default function Home() {
   const [isClearing, setIsClearing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [history, setHistory] = useState<Message[]>([]);
+  const [summary, setSummary] = useState<string>("");
 
   const clearContainer = async () => {
     if (
@@ -104,10 +107,9 @@ export default function Home() {
 
       const data: ChatResponse = await response.json();
 
-      if (data.containerId) {
-        setContainerId(data.containerId);
-      }
+      setContainerId(data.containerId);
       setHistory((prevHistory) => [...prevHistory, ...data.history]);
+      setSummary(data.summary);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -184,7 +186,22 @@ export default function Home() {
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-4 bg-gray-50 rounded-md space-y-3 border border-gray-300"
         >
-          <ChatHistory history={history} />
+          <ReactMarkdown
+            components={{
+              h1: ({ children }) => (
+                <h1 className="text-4xl font-bold">{children}</h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="text-3xl font-semibold">{children}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-2xl font-semibold">{children}</h3>
+              ),
+            }}
+          >
+            {summary}
+          </ReactMarkdown>
+          {/* <ChatHistory history={history} /> */}
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 flex gap-2">

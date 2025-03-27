@@ -7,7 +7,7 @@ async function main() {
   testcontainer = await docker.startContainer();
 
   const testPrompt =
-    "Write a program that can tell whether a number is even or odd.";
+    "Write a function that can tell whether a number is even or odd.";
 
   try {
     const result = await workflow.chain.invoke({
@@ -15,7 +15,7 @@ async function main() {
       container: testcontainer,
     });
 
-    console.log(result);
+    console.log(result.summary);
   } catch (error) {
     console.log("Failed to run workflow chain: ", error);
   }

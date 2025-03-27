@@ -54,6 +54,7 @@ app.post("/api/chat", async (req, res) => {
     res.json({
       history: result.history,
       containerId: container.id,
+      summary: result.summary,
     });
   } catch (error) {
     console.error("Error:", error);

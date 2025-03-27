@@ -30,6 +30,7 @@ const prompts = {
     promptValues.generateWithErrorPrompt
   ),
   unitTesting: ChatPromptTemplate.fromTemplate(promptValues.unitTestPrompt),
+  summarize: ChatPromptTemplate.fromTemplate(promptValues.summarizePrompt),
 };
 
 // Define Agents
@@ -46,7 +47,7 @@ const instructAgent = async (state) => {
     task: state.task,
   });
   const instructions = response.content;
-  console.log("INSTRUCTIONS: ", instructions);
+  // console.log("INSTRUCTIONS: ", instructions);
 
   const newHistory = [
     ...(state.history || []),
@@ -72,6 +73,8 @@ const generateAgent = async (state) => {
   });
 
   const code = response.content;
+
+  console.log("AI OUTPUT: ", code);
 
   // Parse code into files
   const codeFiles = utils.parseCodeFiles(code);
@@ -144,7 +147,7 @@ const reviewAgent = async (state) => {
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
 
-  console.log("CODEBASE: ", state.codebase);
+  // console.log("CODEBASE: ", state.codebase);
 
   const response = await chain.invoke({
     code: state.codebase,
@@ -180,6 +183,8 @@ const reviseAgent = async (state) => {
 
   const code = response.content;
 
+  console.log("AI OUTPUT: ", code);
+
   const codeFiles = utils.parseCodeFiles(code);
   let codeFilesString = "";
   for (const [filename, content] of Object.entries(codeFiles)) {
@@ -187,6 +192,7 @@ const reviseAgent = async (state) => {
     codeFilesString += `FILE: ${filename}\n${content}\n\n`;
   }
 
+  console.log("OLD CODE: ", state.codebase);
   console.log("REVISED CODE: ", codeFilesString);
 
   const newHistory = [
@@ -203,9 +209,36 @@ const reviseAgent = async (state) => {
   };
 };
 
+const summarizeAgent = async (state) => {
+  console.log("SUMMARIZE STEP");
+
+  const chain = RunnableSequence.from([prompts.summarize, ai_a]);
+
+  const response = await chain.invoke({
+    codebase: state.codebase,
+    task: state.task,
+  });
+
+  const summary = utils.cleanCode(response.content);
+  console.log("SUMMARY: ", summary);
+
+  const newHistory = [
+    ...(state.history || []),
+    { agent: "AI_A", message: summary },
+  ];
+
+  return {
+    state,
+    history: newHistory,
+    summary,
+    next: "end",
+  };
+};
+
 module.exports = {
   instructAgent,
   generateAgent,
   reviewAgent,
   reviseAgent,
+  summarizeAgent,
 };
