@@ -52,13 +52,9 @@ app.post("/api/chat", async (req, res) => {
     });
 
     res.json({
-      originalPrompt: userInput,
-      llmAOutput: result.llmAOutput,
-      llmBOutput: result.llmBOutput,
-      instructions: result.instructions,
-      finalCode: result.currentCode,
-      iterationsUsed: result.iterations,
+      history: result.history,
       containerId: container.id,
+      summary: result.summary,
     });
   } catch (error) {
     console.error("Error:", error);

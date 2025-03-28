@@ -7,7 +7,6 @@ const parseCodeFiles = (codeText) => {
   const files = {};
   let currentFileName = null;
   let currentFileContent = [];
-  let insideCodeBlock = false;
 
   // Split by lines
   const lines = codeText.split("\n");
@@ -27,16 +26,8 @@ const parseCodeFiles = (codeText) => {
 
       // Start new file
       currentFileName = fileMatch[1].trim();
-      insideCodeBlock = false;
     } else if (currentFileName) {
-      if (line.trim().startsWith("```")) {
-        insideCodeBlock = !insideCodeBlock;
-        continue; // Skip storing the backtick lines
-      }
-
-      if (insideCodeBlock) {
-        currentFileContent.push(line);
-      }
+      currentFileContent.push(line);
     }
   }
 

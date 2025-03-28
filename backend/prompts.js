@@ -16,21 +16,14 @@ const instructPrompt = `
     Be specific about architecture but allow flexibility in implementation details. Prioritize clarity and maintainability over brevity.
     Keep instructions under 200 words and use bullet points or numbered lists where appropriate.
     
-    Task: {input}
+    Task: {task}
+
+    Current Code (might be empty):
+    {code}
 `;
 
 const reviewPrompt = `
     You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
-    The code has been run against some unit tests that were created by a different testing engineer and you are provided 
-    with their results. You do not have access to the unit tests themselves, only the results. Note that the unit tests 
-    might not be comprehensive and could have missed some edge cases.
-    
-    Conduct a comprehensive review focusing on:
-    1) Functional correctness - Does the code fulfill all requirements?
-    2) Logical errors - Are there bugs, edge cases, or incorrect implementations?
-    3) Performance issues - Are there inefficient algorithms or approaches?
-    4) Security vulnerabilities - Is the code secure against common threats?
-    5) Code quality - Is the code maintainable, readable, and following best practices?
     
     For each issue found:
     - Specify the exact file and location
@@ -39,7 +32,8 @@ const reviewPrompt = `
     If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
     DO NOT include the phrase "the code is correct" otherwise.
     
-    {input}
+    Here is the code:
+    {code}
 `;
 
 const generatePrompt = `
@@ -59,7 +53,10 @@ const generatePrompt = `
     
     Respond with only the code and file labels without additional explanations.
     
-    Instructions: {input}
+    Instructions: {instructions}
+
+    Current Code (might be empty):
+    {code}
 `;
 
 const generateWithErrorPrompt = `
@@ -89,21 +86,29 @@ const revisePrompt = `
     You have been given feedback from a senior software developer on your code. Your task is to revise 
     the code based on the feedback provided.
     
-    Follow these guidelines:
+    Follow these guidelines when revising the code:
     1) Implement complete, production-ready code that fulfills all requirements
     2) Use best practices for the language/framework specified
     3) Include appropriate error handling and input validation
     4) Add brief comments explaining changes you've made
     5) Format code consistently with standard conventions
-    6) Regenerate the entire file even if only a small part is changed
     
-    When generating multiple files:
-    - Use "FILE: filename.ext" headings to clearly separate each file
+    Always format the output according to these rules:
+    - **Always** use the format:
+      
+      FILE: filename.ext
+      \`\`\`language
+      (code content)
+      \`\`\`
+    - Regenerate the entire file even if only a small part is changed
     - Include necessary imports/dependencies in each file
     - Ensure files are properly connected (e.g., imports match exports)
     
-    Feedback and Current Existing Code: 
-    {input}
+    Feedback:
+    {review}
+
+    Current Code:
+    {code}
 `;
 
 const unitTestPrompt = `
@@ -130,6 +135,27 @@ const unitTestPrompt = `
     Instructions:
     {input}
 `;
+
+const summarizePrompt = `
+    You are an AI assistant that analyzes and documents a given codebase. Your task is to generate a structured and concise summary that includes:
+    
+    1. **Overview**: A high-level summary of the purpose and functionality of the codebase.
+    2. **Architecture**: A breakdown of the main components, modules, or layers and how they interact.
+    3. **Key Features**: A list of important functionalities provided by the codebase.
+    4. **Technologies Used**: A brief mention of the primary frameworks, libraries, or tools utilized.
+    5. **Code Structure**: An outline of the directory structure and key files.
+    6. **Notable Design Patterns**: Any design patterns, coding conventions, or best practices followed.
+    
+    Respond with only the structured documentation without additional commentary. 
+    Make the summary use markdown formatting that looks visually appealing with nice headings and bullet points.
+
+    Original Task:
+    {task}
+
+    Codebase:  
+    {codebase}
+`;
+
 module.exports = {
   instructPrompt,
   reviewPrompt,
@@ -137,4 +163,5 @@ module.exports = {
   revisePrompt,
   generateWithErrorPrompt,
   unitTestPrompt,
+  summarizePrompt,
 };
