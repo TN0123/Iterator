@@ -65,6 +65,7 @@ const instructAgent = async (state) => {
 
   return {
     state,
+    codebase: currentCode,
     history: newHistory,
     instructions,
     next: "generate",
@@ -79,6 +80,7 @@ const generateAgent = async (state) => {
 
   const response = await chain.invoke({
     instructions: state.instructions,
+    code: state.codebase,
   });
 
   const code = response.content;
@@ -88,11 +90,13 @@ const generateAgent = async (state) => {
   // Parse code into files
   const codeFiles = utils.parseCodeFiles(code);
 
+  console.log("CODE FILES: ", codeFiles);
+
   let codeFilesString = "";
   // Save files to Docker container
   for (const [filename, content] of Object.entries(codeFiles)) {
     await docker.createOrUpdateFile(state.container, filename, content);
-    codeFilesString += `FILE: ${filename}\n${content}\n\n`;
+    codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
   console.log("GENERATED CODE: ", codeFilesString);
@@ -198,7 +202,7 @@ const reviseAgent = async (state) => {
   let codeFilesString = "";
   for (const [filename, content] of Object.entries(codeFiles)) {
     await docker.createOrUpdateFile(state.container, filename, content);
-    codeFilesString += `FILE: ${filename}\n${content}\n\n`;
+    codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
   console.log("OLD CODE: ", state.codebase);

@@ -54,6 +54,9 @@ const generatePrompt = `
     Respond with only the code and file labels without additional explanations.
     
     Instructions: {instructions}
+
+    Current Code (might be empty):
+    {code}
 `;
 
 const generateWithErrorPrompt = `
