@@ -24,6 +24,7 @@ const ai_b = new ChatGoogleGenerativeAI({
 const prompts = {
   instruct: ChatPromptTemplate.fromTemplate(promptValues.instructPrompt),
   review: ChatPromptTemplate.fromTemplate(promptValues.reviewPrompt),
+  review_ut: ChatPromptTemplate.fromTemplate(promptValues.reviewPrompt_givenUT),
   generate: ChatPromptTemplate.fromTemplate(promptValues.generatePrompt),
   revise: ChatPromptTemplate.fromTemplate(promptValues.revisePrompt),
   generateWithError: ChatPromptTemplate.fromTemplate(
@@ -37,18 +38,15 @@ const prompts = {
 
 // add new agent that can summarize existing codebase if it exists and add it to metadata
 // this agent should act before instruct and between generate and review
-
 const instructAgent = async (state) => {
   // console.log("INSTRUCT AGENT STATE:", state);
   console.log("INSTRUCT STEP");
 
   const fileList = await docker.listFiles(state.container);
-  let currentCode = "";
+  console.log("INSTRUCT STEP");
 
-  for (const file of fileList) {
-    const content = await docker.readFile(state.container, file);
-    currentCode += `FILE: ${file}\n${content}\n\n`;
-  }
+  // console.log("Container State:", state.container);
+  const currentCode = await utils.readDockerDirectory(state.container.id, "/code");
 
   const chain = RunnableSequence.from([prompts.instruct, ai_a]);
   const response = await chain.invoke({
@@ -56,7 +54,6 @@ const instructAgent = async (state) => {
     code: currentCode,
   });
   const instructions = response.content;
-  // console.log("INSTRUCTIONS: ", instructions);
 
   const newHistory = [
     ...(state.history || []),
@@ -114,59 +111,54 @@ const generateAgent = async (state) => {
   };
 };
 
-// const unitTestingAgent = async (state) => {
-//   // console.log("UNIT TESTING AGENT STATE:", state);
-//   console.log("UNIT TESTING STEP");
-//   const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
-//   const response = await chain.invoke({
-//     input: state.instructions,
-//     code: state.currentCode,
-//   });
+const unitTestingAgent = async (state) => {
+  // console.log("UNIT TESTING AGENT STATE:", state);
+  console.log("UNIT TESTING STEP");
+  const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
+  const response = await chain.invoke({
+    input: state.instructions,
+    code: state.currentCode,
+  });
 
-//   const unitTestCommands = utils.cleanCode(response.content);
-//   // console.log("UNIT TEST COMMANDS: ", unitTestCommands);
-//   // console.log("END OF CONSOLE.LOG");
-//   const canUnitTest = !unitTestCommands
-//     .toLowerCase()
-//     .includes("cannot unit-test");
+  const unitTestCommands = utils.cleanCode(response.content);
+  // console.log("UNIT TEST COMMANDS: ", unitTestCommands);
+  // console.log("END OF CONSOLE.LOG");
+  const exec = await docker.execInContainer(state.container, unitTestCommands);
+  let output = `\nCommand:\n${unitTestCommands}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
+  console.log(output);
 
-//   if (!canUnitTest) {
-//     return {
-//       state,
-//       canUnitTest,
-//       unitTestResults: "No unit tests applicable.",
-//       next: "review",
-//     };
-//   }
+  // console.log("UNIT TEST OUTPUT:", output);
 
-//   let output = "";
-
-//   const exec = await docker.execInContainer(state.container, unitTestCommands);
-//   output += `\nCommand:\n${unitTestCommands}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
-
-//   // console.log("UNIT TEST OUTPUT:", output);
-
-//   return {
-//     state,
-//     canUnitTest,
-//     unitTestResults: output,
-//     next: "review",
-//   };
-// };
+  return output;
+};
 
 const reviewAgent = async (state) => {
   // console.log("REVIEW AGENT STATE:", state);
   console.log("REVIEW STEP");
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
+  const currentCode = await utils.readDockerDirectory(state.container.id, "/code");
 
   // console.log("CODEBASE: ", state.codebase);
 
   const response = await chain.invoke({
-    code: state.codebase,
+    code: currentCode,
   });
 
-  const codeReview = response.content;
+  let codeReview = response.content;
+  const unitTest = codeReview.includes("UNIT TEST");
+
+  if (unitTest) {
+    console.log("UNIT TESTING...");
+    let unitTestOutput = await unitTestingAgent(state);
+    const chain = RunnableSequence.from([prompts.review_ut, ai_a]);
+    const response = await chain.invoke({
+      code: currentCode,
+      ut: unitTestOutput,
+    });
+    codeReview = response.content;
+  }
+
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   console.log("REVIEW: ", codeReview);
 

@@ -21,9 +21,6 @@ const graphStateChannels = {
   isCorrect: {
     value: (prevIsCorrect, isCorrect) => isCorrect,
   },
-  unitTestSummary: {
-    value: (prevUnitTestSummary, unitTestSummary) => unitTestSummary,
-  },
   next: {
     value: (prevNext, next) => next,
   },
