@@ -30,11 +30,29 @@ const reviewPrompt = `
     - Explain precisely what's wrong
     
     If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
-    DO NOT include the phrase "the code is correct" otherwise.
+    DO NOT include the phrase "the code is correct" otherwise. You may also instead request unit testing by responding exactly with "UNIT TEST".
     
     Here is the code:
     {code}
 `;
+
+const reviewPrompt_givenUT = `
+    You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
+    You are also given unit testing results for this code.
+    
+    For each issue found:
+    - Specify the exact file and location
+    - Explain precisely what's wrong
+    
+    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
+    DO NOT include the phrase "the code is correct" otherwise.
+    
+    Here is the code:
+    {code}
+
+    Here are the unit testing results:
+    {ut}
+`
 
 const generatePrompt = `
     You are an expert software developer implementing code based on architectural specifications.
@@ -112,7 +130,7 @@ const revisePrompt = `
 `;
 
 const unitTestPrompt = `
-    You are meticulous testing engineer responsible for ensuring the reliability of someone else's written code.
+    You are a meticulous testing engineer responsible for ensuring the reliability of someone else's written code.
     You are provided with a code file that already exists.
     
     Your task is to generate a file with comprehensive unit test cases for the provided code as well as 
@@ -127,7 +145,6 @@ const unitTestPrompt = `
     - Output **only the bash commands**, newline-separated, no explanations
     - Ensure proper indentation in generated Python code
     - Use "python3" instead of "python" for compatibility
-    - If unit testing is not possible or necessary, respond with exactly: **cannot unit-test**
 
     Code:
     {code}
@@ -161,6 +178,7 @@ module.exports = {
   reviewPrompt,
   generatePrompt,
   revisePrompt,
+  reviewPrompt_givenUT,
   generateWithErrorPrompt,
   unitTestPrompt,
   summarizePrompt,
