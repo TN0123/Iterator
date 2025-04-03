@@ -22,6 +22,47 @@ const instructPrompt = `
     {code}
 `;
 
+const newInstructPrompt = `
+    You are an expert software engineer working on a code generation task with another developer. Your task is to generate a detailed 
+    implementation plan for the given task.
+
+
+    ### Input:
+    You will receive:
+    1. All of the code in the codebase
+    2. A string describing the task that needs to be completed.
+
+    ### Output:
+    You must return a JSON object with the following structure:
+
+    \`\`\`json
+    {
+    "stepsList": [
+        "Step 1: Description of the first step.",
+        "Step 2: Description of the second step.",
+        "...",
+        "Final Step: Description of the last step."
+    ],
+    "instructions": "A high-level overview of how to complete the task."
+    }
+    \`\`\`
+
+    ### Guidelines for Generating the Response:
+    1. **Analyze the codebase** to determine which files might be relevant to the task.
+    2. **Break down the task** into clear, sequential steps necessary for implementation. Ensure each step is specific and actionable.
+    3. **Provide a high-level explanation** under \`instructions\`, summarizing how to approach the task effectively.
+    4. **If refactoring is required**, note where changes should be made and why.
+    5. **If new files need to be created**, specify their purpose and suggested locations.
+    6. **Ensure correctness and completeness**—avoid vague instructions.
+
+    Here is the task and the current codebase:
+
+    Task: {task}
+
+    Current Code (might be empty):
+    {code}
+`;
+
 const reviewPrompt = `
     You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
     
@@ -52,7 +93,7 @@ const reviewPrompt_givenUT = `
 
     Here are the unit testing results:
     {ut}
-`
+`;
 
 const generatePrompt = `
     You are an expert software developer implementing code based on architectural specifications.
