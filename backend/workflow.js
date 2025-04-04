@@ -39,6 +39,9 @@ const graphStateChannels = {
   steps: {
     value: (prevSteps, steps) => steps,
   },
+  currentStep: {
+    value: (prevCurrentStep, currentStep) => currentStep,
+  },
 };
 
 // Create workflow graph

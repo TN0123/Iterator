@@ -55,7 +55,7 @@ const instructAgent = async (state) => {
   const instructResult = JSON.parse(utils.cleanCode(response.content));
   const instructions = instructResult.instructions;
   const steps = instructResult.steps;
-  console.log("INSTRUCT RESULT: ", instructResult);
+  // console.log("INSTRUCT RESULT: ", instructResult);
 
   const newHistory = [
     ...(state.history || []),
@@ -79,18 +79,19 @@ const generateAgent = async (state) => {
   const chain = RunnableSequence.from([prompts.generate, ai_b]);
 
   const response = await chain.invoke({
-    instructions: state.instructions,
+    mainTask: state.instructions,
+    subTask: state.steps[0],
     code: state.codebase,
   });
 
   const code = response.content;
 
-  console.log("AI OUTPUT: ", code);
+  // console.log("AI OUTPUT: ", code);
 
   // Parse code into files
   const codeFiles = utils.parseCodeFiles(code);
 
-  console.log("CODE FILES: ", codeFiles);
+  // console.log("CODE FILES: ", codeFiles);
 
   let codeFilesString = "";
   // Save files to Docker container
@@ -99,7 +100,7 @@ const generateAgent = async (state) => {
     codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
-  console.log("GENERATED CODE: ", codeFilesString);
+  // console.log("GENERATED CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),

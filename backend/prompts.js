@@ -73,10 +73,12 @@ const reviewPrompt_givenUT = `
 `;
 
 const generatePrompt = `
-    You are an expert software developer implementing code based on architectural specifications.
-    
+    You are an expert software developer pair programming with another software engineer.
+    You are given a small subtask for a larger task, and you need to implement the code for only this subtask.
+    You will be provided the current codebase, the instructions for the overall task, and the instructions for the subtask.
+
     Follow these guidelines:
-    1) Implement complete, production-ready code that fulfills all requirements
+    1) Implement complete, production-ready code that fulfills all requirements for the subtask
     2) Use best practices for the language/framework specified
     3) Include appropriate error handling and input validation
     4) Add brief comments explaining complex logic or important decisions
@@ -89,7 +91,9 @@ const generatePrompt = `
     
     Respond with only the code and file labels without additional explanations.
     
-    Instructions: {instructions}
+    Overall Task: {mainTask}
+
+    Your Subtask: {subTask}
 
     Current Code (might be empty):
     {code}

@@ -16,9 +16,11 @@ const llm = new ChatGoogleGenerativeAI({
 
 const testWorkflow = new StateGraph({ channels: workflow.graphStateChannels });
 testWorkflow.addNode("instruct", agents.instructAgent);
+testWorkflow.addNode("generate", agents.generateAgent);
 
 testWorkflow.addEdge(START, "instruct");
-testWorkflow.addEdge("instruct", END);
+testWorkflow.addEdge("instruct", "generate");
+testWorkflow.addEdge("generate", END);
 
 const testChain = testWorkflow.compile();
 
@@ -30,6 +32,7 @@ async function main() {
   });
   console.log(result.instructions);
   console.log(result.steps[0]);
+  console.log(result.codebase);
 }
 
 main();
