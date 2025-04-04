@@ -42,18 +42,20 @@ const instructAgent = async (state) => {
   // console.log("INSTRUCT AGENT STATE:", state);
   console.log("INSTRUCT STEP");
 
-  const fileList = await docker.listFiles(state.container);
-  console.log("INSTRUCT STEP");
-
-  // console.log("Container State:", state.container);
-  const currentCode = await utils.readDockerDirectory(state.container.id, "/code");
+  const currentCode = await utils.readDockerDirectory(
+    state.container.id,
+    "/code"
+  );
 
   const chain = RunnableSequence.from([prompts.instruct, ai_a]);
   const response = await chain.invoke({
     task: state.task,
     code: currentCode,
   });
-  const instructions = response.content;
+  const instructResult = JSON.parse(utils.cleanCode(response.content));
+  const instructions = instructResult.instructions;
+  const steps = instructResult.steps;
+  console.log("INSTRUCT RESULT: ", instructResult);
 
   const newHistory = [
     ...(state.history || []),
@@ -65,6 +67,7 @@ const instructAgent = async (state) => {
     codebase: currentCode,
     history: newHistory,
     instructions,
+    steps,
     next: "generate",
   };
 };
@@ -137,7 +140,10 @@ const reviewAgent = async (state) => {
   console.log("REVIEW STEP");
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
-  const currentCode = await utils.readDockerDirectory(state.container.id, "/code");
+  const currentCode = await utils.readDockerDirectory(
+    state.container.id,
+    "/code"
+  );
 
   // console.log("CODEBASE: ", state.codebase);
 

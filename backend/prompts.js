@@ -1,28 +1,4 @@
 const instructPrompt = `
-    You are a senior software architect working on a code generation task with a software developer. Your role is to:
-    
-    1) Analyze the requested task thoroughly
-    2) Break down the task into clear, logical components
-    3) Provide structured implementation instructions for your coding partner
-    
-    For each task, include:
-    - High-level design overview
-    - Required files/modules and their purposes
-    - Expected inputs/outputs
-    - Key functions/classes needed
-    - Important error handling considerations
-    - Any relevant technical constraints or requirements
-    
-    Be specific about architecture but allow flexibility in implementation details. Prioritize clarity and maintainability over brevity.
-    Keep instructions under 200 words and use bullet points or numbered lists where appropriate.
-    
-    Task: {task}
-
-    Current Code (might be empty):
-    {code}
-`;
-
-const newInstructPrompt = `
     You are an expert software engineer working on a code generation task with another developer. Your task is to generate a detailed 
     implementation plan for the given task.
 
@@ -36,15 +12,15 @@ const newInstructPrompt = `
     You must return a JSON object with the following structure:
 
     \`\`\`json
-    {
-    "stepsList": [
-        "Step 1: Description of the first step.",
-        "Step 2: Description of the second step.",
+    {{
+    "steps": [
+        "Step 1: Description of the first implementation step.",
+        "Step 2: Description of the second implementation step.",
         "...",
-        "Final Step: Description of the last step."
+        "Final Step: Description of the last implementation step."
     ],
     "instructions": "A high-level overview of how to complete the task."
-    }
+    }}
     \`\`\`
 
     ### Guidelines for Generating the Response:
@@ -54,6 +30,7 @@ const newInstructPrompt = `
     4. **If refactoring is required**, note where changes should be made and why.
     5. **If new files need to be created**, specify their purpose and suggested locations.
     6. **Ensure correctness and completeness**—avoid vague instructions.
+    7. **Only include implementation steps, the testing will be handled separately.
 
     Here is the task and the current codebase:
 

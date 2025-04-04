@@ -72,4 +72,5 @@ const chain = workflow.compile();
 
 module.exports = {
   chain,
+  graphStateChannels,
 };
