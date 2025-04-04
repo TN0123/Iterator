@@ -2,7 +2,7 @@ const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const promptValues = require("./prompts");
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 const utils = require("./utils");
 
 require("dotenv").config();

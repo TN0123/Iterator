@@ -4,7 +4,7 @@ const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const { StateGraph, END, START } = require("@langchain/langgraph");
 const workflow = require("./workflow");
 const agents = require("./agents");
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 
 require("dotenv").config();
 

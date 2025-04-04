@@ -1,4 +1,4 @@
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 const { exec } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -83,5 +83,5 @@ const parseCodeFiles = (codeText) => {
 module.exports = {
   cleanCode,
   parseCodeFiles,
-  readDockerDirectory
+  readDockerDirectory,
 };
