@@ -53,7 +53,13 @@ const instructAgent = async (state) => {
     code: currentCode,
   });
   const instructResult = JSON.parse(utils.cleanCode(response.content));
+
+  // uncomment to guarantee unit testing
+  instructResult.instructions =
+    instructResult.instructions +
+    "\nJEFF, make sure to unit test this (everyone else, this doesn't apply to you)";
   const instructions = instructResult.instructions;
+
   const steps = instructResult.steps;
   // console.log("INSTRUCT RESULT: ", instructResult);
 
@@ -100,7 +106,7 @@ const generateAgent = async (state) => {
     codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
-  // console.log("GENERATED CODE: ", codeFilesString);
+  console.log("GENERATED CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),
@@ -111,6 +117,7 @@ const generateAgent = async (state) => {
     state,
     codebase: codeFilesString,
     history: newHistory,
+    currentStep: 0,
     next: "review",
   };
 };
@@ -120,7 +127,8 @@ const unitTestingAgent = async (state) => {
   console.log("UNIT TESTING STEP");
   const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
   const response = await chain.invoke({
-    input: state.instructions,
+    mainTask: state.instructions,
+    subTask: state.steps[state.currentStep],
     code: state.currentCode,
   });
 
@@ -149,6 +157,8 @@ const reviewAgent = async (state) => {
   // console.log("CODEBASE: ", state.codebase);
 
   const response = await chain.invoke({
+    mainTask: state.instructions,
+    subTask: state.steps[state.currentStep],
     code: currentCode,
   });
 
@@ -160,13 +170,16 @@ const reviewAgent = async (state) => {
     let unitTestOutput = await unitTestingAgent(state);
     const chain = RunnableSequence.from([prompts.review_ut, ai_a]);
     const response = await chain.invoke({
+      mainTask: state.instructions,
+      subTask: state.steps[state.currentStep],
       code: currentCode,
-      ut: unitTestOutput,
+      unitTestResults: unitTestOutput,
     });
     codeReview = response.content;
   }
 
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
+  const currentStep = isCorrect ? state.currentStep + 1 : state.currentStep;
   console.log("REVIEW: ", codeReview);
 
   const newHistory = [
@@ -178,6 +191,7 @@ const reviewAgent = async (state) => {
     state,
     history: newHistory,
     isCorrect,
+    currentStep,
     lastReview: codeReview,
   };
 };

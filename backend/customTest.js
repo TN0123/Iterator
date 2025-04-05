@@ -17,22 +17,25 @@ const llm = new ChatGoogleGenerativeAI({
 const testWorkflow = new StateGraph({ channels: workflow.graphStateChannels });
 testWorkflow.addNode("instruct", agents.instructAgent);
 testWorkflow.addNode("generate", agents.generateAgent);
+testWorkflow.addNode("review", agents.reviewAgent);
 
 testWorkflow.addEdge(START, "instruct");
 testWorkflow.addEdge("instruct", "generate");
-testWorkflow.addEdge("generate", END);
+testWorkflow.addEdge("generate", "review");
+testWorkflow.addEdge("review", END);
 
 const testChain = testWorkflow.compile();
 
 async function main() {
   const testContainer = await docker.startContainer();
   const result = await testChain.invoke({
-    task: "Create a 2048 web application",
+    task: "write a function that can tell what a number is congruent to mod 7. It should be able to handle negative numbers as well",
     container: testContainer,
   });
   console.log(result.instructions);
   console.log(result.steps[0]);
   console.log(result.codebase);
+  console.log(result.lastReview);
 }
 
 main();

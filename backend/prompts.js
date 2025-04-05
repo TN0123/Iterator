@@ -40,38 +40,6 @@ const instructPrompt = `
     {code}
 `;
 
-const reviewPrompt = `
-    You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
-    
-    For each issue found:
-    - Specify the exact file and location
-    - Explain precisely what's wrong
-    
-    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
-    DO NOT include the phrase "the code is correct" otherwise. You may also instead request unit testing by responding exactly with "UNIT TEST".
-    
-    Here is the code:
-    {code}
-`;
-
-const reviewPrompt_givenUT = `
-    You are a senior code reviewer performing a detailed analysis of code submitted by another software developer.
-    You are also given unit testing results for this code.
-    
-    For each issue found:
-    - Specify the exact file and location
-    - Explain precisely what's wrong
-    
-    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
-    DO NOT include the phrase "the code is correct" otherwise.
-    
-    Here is the code:
-    {code}
-
-    Here are the unit testing results:
-    {ut}
-`;
-
 const generatePrompt = `
     You are an expert software developer pair programming with another software engineer.
     You are given a small subtask for a larger task, and you need to implement the code for only this subtask.
@@ -91,14 +59,17 @@ const generatePrompt = `
     
     Respond with only the code and file labels without additional explanations.
     
-    Overall Task: {mainTask}
+    Overall Task: 
+    {mainTask}
 
-    Your Subtask: {subTask}
+    Your Subtask: 
+    {subTask}
 
     Current Code (might be empty):
     {code}
 `;
 
+// not up to date with most recent changes
 const generateWithErrorPrompt = `
     You are an expert software developer implementing code based on architectural specifications.
 
@@ -118,6 +89,89 @@ const generateWithErrorPrompt = `
     Respond with only the code and file labels without additional explanations.
     
     Instructions: {input}
+`;
+
+const reviewPrompt = `
+    Your name is JEFF.
+    You are a senior code reviewer working with another software developer on a code generation task.
+    The other developer had been given an implementation plan and generated code for a subtask in that implementation plan.
+    Your task is to review the generated code and provide feedback on its correctness and quality. If it would be helpful, 
+    you can also request unit test results to be generated for you by responding with exactly "UNIT TEST".
+    Note that the developer might have added placeholder comments in the code for future steps, these are allowed.
+
+    For each issue found:
+    - Specify the exact file and location
+    - Explain precisely what's wrong
+
+    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
+    DO NOT include the phrase "the code is correct" otherwise. You may also instead request unit testing by 
+    responding exactly with "UNIT TEST".
+
+    Overall Task: 
+    {mainTask}
+
+    Subtask the developer worked on: 
+    {subTask}
+
+    Current Code: 
+    {code}
+
+`;
+
+const unitTestPrompt = `
+    You are a meticulous testing engineer responsible for ensuring the reliability of another developer's written code that has been
+    created to solve a particular subtask in an implementation plan.
+    
+    Your task is to generate a file with comprehensive unit test cases for the provided code as well as 
+    commands to run the testing file and see the test cases through a series of exact bash commands. You must:
+    1. Run cd /code to change to the correct directory
+    2. Create a test file and run the file
+    3. Rely on built-in unit testing frameworks and cannot use commands to install additional packages
+    4. Create test cases based on what the instructions were, NOT how the code is implemented
+    5. Do not run python3 -m unittest commands, only run the test file directly
+    
+    Output Format:
+    - Output **only the bash commands**, newline-separated, no explanations
+    - Ensure proper indentation in generated Python code
+    - Use "python3" instead of "python" for compatibility
+
+
+    Overall task:
+    {mainTask}
+
+    Subtask the developer worked on:
+    {subTask}
+
+    Code:
+    {code}
+`;
+
+const reviewPrompt_givenUT = `
+    You are a senior code reviewer working with another software developer on a code generation task.
+    The other developer had been given an implementation plan and generated code for a subtask in that implementation plan.
+    Your task is to review the generated code and provide feedback on its correctness and quality. You are also provided
+    the results from unit testing. Note that the developer might have added placeholder comments in the code for future 
+    steps, these are allowed.
+
+
+    For each issue found:
+    - Specify the exact file and location
+    - Explain precisely what's wrong
+
+    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
+    DO NOT include the phrase "the code is correct" otherwise.
+
+    Overall Task: 
+    {mainTask}
+
+    Subtask the developer worked on: 
+    {subTask}
+
+    Current Code: 
+    {code}
+
+    Unit Test Results:
+    {unitTestResults}
 `;
 
 const revisePrompt = `
@@ -149,30 +203,6 @@ const revisePrompt = `
 
     Current Code:
     {code}
-`;
-
-const unitTestPrompt = `
-    You are a meticulous testing engineer responsible for ensuring the reliability of someone else's written code.
-    You are provided with a code file that already exists.
-    
-    Your task is to generate a file with comprehensive unit test cases for the provided code as well as 
-    commands to run the testing file and see the test cases through a series of exact bash commands. You must:
-    1. Run cd /code to change to the correct directory
-    2. Create a test file and run the file
-    3. Rely on built-in unit testing frameworks and cannot use commands to install additional packages
-    4. Create test cases based on what the instructions were, NOT how the code is implemented
-    5. Do not run python3 -m unittest commands, only run the test file directly
-    
-    Output Format:
-    - Output **only the bash commands**, newline-separated, no explanations
-    - Ensure proper indentation in generated Python code
-    - Use "python3" instead of "python" for compatibility
-
-    Code:
-    {code}
-
-    Instructions:
-    {input}
 `;
 
 const summarizePrompt = `
