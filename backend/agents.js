@@ -39,7 +39,6 @@ const prompts = {
 // add new agent that can summarize existing codebase if it exists and add it to metadata
 // this agent should act before instruct and between generate and review
 const instructAgent = async (state) => {
-  // console.log("INSTRUCT AGENT STATE:", state);
   console.log("INSTRUCT STEP");
 
   const currentCode = await utils.readDockerDirectory(
@@ -55,9 +54,10 @@ const instructAgent = async (state) => {
   const instructResult = JSON.parse(utils.cleanCode(response.content));
 
   // uncomment to guarantee unit testing
-  instructResult.instructions =
-    instructResult.instructions +
-    "\nJEFF, make sure to unit test this (everyone else, this doesn't apply to you)";
+  // instructResult.instructions =
+  //   instructResult.instructions +
+  //   "\nJEFF, make sure to unit test this (everyone else, this doesn't apply to you)";
+
   const instructions = instructResult.instructions;
 
   const steps = instructResult.steps;
@@ -74,13 +74,14 @@ const instructAgent = async (state) => {
     history: newHistory,
     instructions,
     steps,
+    currentStep: 0,
     next: "generate",
   };
 };
 
 const generateAgent = async (state) => {
-  // console.log("GENERATE AGENT STATE:", state);
   console.log("GENERATE STEP");
+  console.log("CURRENT TASK: ", state.steps[state.currentStep]);
 
   const chain = RunnableSequence.from([prompts.generate, ai_b]);
 
@@ -117,13 +118,11 @@ const generateAgent = async (state) => {
     state,
     codebase: codeFilesString,
     history: newHistory,
-    currentStep: 0,
     next: "review",
   };
 };
 
 const unitTestingAgent = async (state) => {
-  // console.log("UNIT TESTING AGENT STATE:", state);
   console.log("UNIT TESTING STEP");
   const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
   const response = await chain.invoke({
@@ -145,7 +144,6 @@ const unitTestingAgent = async (state) => {
 };
 
 const reviewAgent = async (state) => {
-  // console.log("REVIEW AGENT STATE:", state);
   console.log("REVIEW STEP");
 
   const chain = RunnableSequence.from([prompts.review, ai_a]);
@@ -180,7 +178,8 @@ const reviewAgent = async (state) => {
 
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   const currentStep = isCorrect ? state.currentStep + 1 : state.currentStep;
-  console.log("REVIEW: ", codeReview);
+  // console.log("REVIEW: ", codeReview);
+  const newIterations = isCorrect ? 0 : state.iterations;
 
   const newHistory = [
     ...(state.history || []),
@@ -193,23 +192,26 @@ const reviewAgent = async (state) => {
     isCorrect,
     currentStep,
     lastReview: codeReview,
+    iterations: newIterations,
   };
 };
 
 const reviseAgent = async (state) => {
-  //console.log("REVISE AGENT STATE:", state);
   console.log("REVISE STEP");
+  console.log("CURRENT TASK: ", state.steps[state.currentStep]);
 
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
 
   const response = await chain.invoke({
-    review: state.lastReview,
+    mainTask: state.instructions,
+    subTask: state.steps[state.currentStep],
     code: state.codebase,
+    review: state.lastReview,
   });
 
   const code = response.content;
 
-  console.log("AI OUTPUT: ", code);
+  // console.log("AI OUTPUT: ", code);
 
   const codeFiles = utils.parseCodeFiles(code);
   let codeFilesString = "";
@@ -218,8 +220,8 @@ const reviseAgent = async (state) => {
     codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
-  console.log("OLD CODE: ", state.codebase);
-  console.log("REVISED CODE: ", codeFilesString);
+  // console.log("OLD CODE: ", state.codebase);
+  // console.log("REVISED CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),

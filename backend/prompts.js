@@ -175,11 +175,10 @@ const reviewPrompt_givenUT = `
 `;
 
 const revisePrompt = `
-    You are an expert software developer implementing code based on architectural specifications.
+    You are an expert software developer pair programming with another software developer.
+    Originally, you were given an implementation plan and generated code for a subtask in that implementation plan.
+    The other developer has been given feedback on your code and your task is to revise the code based on the feedback provided.
 
-    You have been given feedback from a senior software developer on your code. Your task is to revise 
-    the code based on the feedback provided.
-    
     Follow these guidelines when revising the code:
     1) Implement complete, production-ready code that fulfills all requirements
     2) Use best practices for the language/framework specified
@@ -198,11 +197,17 @@ const revisePrompt = `
     - Include necessary imports/dependencies in each file
     - Ensure files are properly connected (e.g., imports match exports)
     
-    Feedback:
-    {review}
+    The overall task: 
+    {mainTask}
 
-    Current Code:
+    The subtask you worked on: 
+    {subTask}
+
+    The code you submitted:
     {code}
+
+    The feedback you received:
+    {review}
 `;
 
 const summarizePrompt = `

@@ -14,26 +14,45 @@ const llm = new ChatGoogleGenerativeAI({
   maxOutputTokens: 2048,
 });
 
+const MAXITERATIONS = 3;
+
 const testWorkflow = new StateGraph({ channels: workflow.graphStateChannels });
 testWorkflow.addNode("instruct", agents.instructAgent);
 testWorkflow.addNode("generate", agents.generateAgent);
 testWorkflow.addNode("review", agents.reviewAgent);
+testWorkflow.addNode("revise", agents.reviseAgent);
+testWorkflow.addNode("summarize", agents.summarizeAgent);
+
+const reviewConditionalEdges = (state) => {
+  if (
+    (state.isCorrect && state.currentStep == state.steps.length - 1) ||
+    state.iterations >= MAXITERATIONS
+  ) {
+    return "summarize";
+  } else if (state.isCorrect) {
+    return "generate";
+  } else {
+    return "revise";
+  }
+};
 
 testWorkflow.addEdge(START, "instruct");
 testWorkflow.addEdge("instruct", "generate");
 testWorkflow.addEdge("generate", "review");
-testWorkflow.addEdge("review", END);
+testWorkflow.addConditionalEdges("review", reviewConditionalEdges);
+testWorkflow.addEdge("revise", "review");
+testWorkflow.addEdge("summarize", END);
 
 const testChain = testWorkflow.compile();
 
 async function main() {
   const testContainer = await docker.startContainer();
   const result = await testChain.invoke({
-    task: "write a function that can tell what a number is congruent to mod 7. It should be able to handle negative numbers as well",
+    task: "create a 2048 web app",
     container: testContainer,
   });
   console.log(result.instructions);
-  console.log(result.steps[0]);
+  console.log(result.steps);
   console.log(result.codebase);
   console.log(result.lastReview);
 }
