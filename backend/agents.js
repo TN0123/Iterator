@@ -2,8 +2,9 @@ const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const promptValues = require("./prompts");
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 const utils = require("./utils");
+const { END } = require("@langchain/langgraph");
 
 require("dotenv").config();
 
@@ -40,7 +41,7 @@ const prompts = {
 // this agent should act before instruct and between generate and review
 const instructAgent = async (state) => {
   // console.log("INSTRUCT AGENT STATE:", state);
-  console.log("INSTRUCT STEP");
+  // console.log("INSTRUCT STEP");
 
   const fileList = await docker.listFiles(state.container);
   console.log("INSTRUCT STEP");
@@ -180,10 +181,11 @@ const reviseAgent = async (state) => {
   console.log("REVISE STEP");
 
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
+  const currentCode = await utils.readDockerDirectory(state.container.id, "/code");
 
   const response = await chain.invoke({
     review: state.lastReview,
-    code: state.codebase,
+    code: currentCode,
   });
 
   const code = response.content;
@@ -233,10 +235,10 @@ const summarizeAgent = async (state) => {
   ];
 
   return {
-    state,
+    ...state,
     history: newHistory,
     summary,
-    next: "end",
+    next: END,
   };
 };
 

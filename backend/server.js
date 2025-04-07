@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const workflow = require("./workflow");
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 const multer = require("multer");
 const fspromises = require("fs").promises;
 const path = require("path");
@@ -9,6 +9,7 @@ const archiver = require("archiver");
 const os = require("os");
 const { exec } = require("child_process");
 const fs = require("fs");
+const utils = require("./utils");
 
 require("dotenv").config();
 
@@ -43,13 +44,19 @@ const upload = multer({ dest: "uploads/" });
 app.post("/api/chat", async (req, res) => {
   try {
     const userInput = req.body.message;
+    const previousState = req.body.previousState || {};
 
     const container = await getOrCreateContainer();
-
-    const result = await workflow.chain.invoke({
+    const currentCode = await utils.readDockerDirectory(container.id, "/code");
+    const initialState = {
       task: userInput,
       container,
-    });
+      codebase: currentCode,
+      history: previousState?.history || [],
+      next: "instruct", // start fresh each time
+    };
+
+    const result = await workflow.chain.invoke(initialState);
 
     res.json({
       history: result.history,
