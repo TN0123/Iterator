@@ -48,7 +48,7 @@ const testChain = testWorkflow.compile();
 async function main() {
   const testContainer = await docker.startContainer();
   const result = await testChain.invoke({
-    task: "create a 2048 web app",
+    task: "write a function that takes two numbers and returns their sum",
     container: testContainer,
   });
   console.log(result.instructions);

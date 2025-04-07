@@ -178,7 +178,7 @@ const reviewAgent = async (state) => {
 
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   const currentStep = isCorrect ? state.currentStep + 1 : state.currentStep;
-  // console.log("REVIEW: ", codeReview);
+  console.log("REVIEW: ", codeReview);
   const newIterations = isCorrect ? 0 : state.iterations;
 
   const newHistory = [

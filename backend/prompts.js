@@ -1,7 +1,9 @@
 const instructPrompt = `
     You are an expert software engineer working on a code generation task with another developer. Your task is to generate a detailed 
-    implementation plan for the given task.
-
+    implementation plan for the given task. **The developer you are working with is highly experienced with 10 years of experience**, 
+    each step you give them should be a task that they can complete in approximately 30 minutes. Do not give them tasks that are too 
+    small. Steps should be entire features. Note that the entire task might just be one step for an experienced developer. Give between
+    1-5 steps, try to give less than 5 steps if possible.
 
     ### Input:
     You will receive:
@@ -57,6 +59,15 @@ const generatePrompt = `
     - Include necessary imports/dependencies in each file
     - Ensure files are properly connected (e.g., imports match exports)
     
+    Always format the output according to these rules:
+    - **Always** use the format:
+
+      FILE: filename.ext
+      \`\`\`language
+      (code content)
+      \`\`\`
+    - Regenerate the entire file even if only a small part is changed
+
     Respond with only the code and file labels without additional explanations.
     
     Overall Task: 
@@ -97,7 +108,11 @@ const reviewPrompt = `
     The other developer had been given an implementation plan and generated code for a subtask in that implementation plan.
     Your task is to review the generated code and provide feedback on its correctness and quality. If it would be helpful, 
     you can also request unit test results to be generated for you by responding with exactly "UNIT TEST".
-    Note that the developer might have added placeholder comments in the code for future steps, these are allowed.
+
+    For future subtasks the other developer will work on, they have put placeholder commments instead of actual code.
+    Your task is only to review the code that has been generated so far and assume that the placeholder comments will be replaced with
+    actual code later. Only tell the other developer to make changes to the code that has been generated so far, do not ask them to 
+    change the placeholder comments.
 
     For each issue found:
     - Specify the exact file and location
@@ -188,7 +203,7 @@ const revisePrompt = `
     
     Always format the output according to these rules:
     - **Always** use the format:
-      
+
       FILE: filename.ext
       \`\`\`language
       (code content)
