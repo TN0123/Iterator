@@ -3,7 +3,9 @@ const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const promptValues = require("./prompts");
 const docker = require("./dockerFunctions");
+const docker = require("./dockerFunctions");
 const utils = require("./utils");
+const { END } = require("@langchain/langgraph");
 
 require("dotenv").config();
 
@@ -201,12 +203,16 @@ const reviseAgent = async (state) => {
   console.log("CURRENT TASK: ", state.steps[state.currentStep]);
 
   const chain = RunnableSequence.from([prompts.revise, ai_b]);
+  const currentCode = await utils.readDockerDirectory(
+    state.container.id,
+    "/code"
+  );
 
   const response = await chain.invoke({
     mainTask: state.instructions,
     subTask: state.steps[state.currentStep],
-    code: state.codebase,
     review: state.lastReview,
+    code: currentCode,
   });
 
   const code = response.content;
@@ -256,10 +262,10 @@ const summarizeAgent = async (state) => {
   ];
 
   return {
-    state,
+    ...state,
     history: newHistory,
     summary,
-    next: "end",
+    next: END,
   };
 };
 
