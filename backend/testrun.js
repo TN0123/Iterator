@@ -1,7 +1,7 @@
 const utils = require("./utils");
 const agents = require("./agents");
 const workflow = require("./workflow");
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 
 async function main() {
   testcontainer = await docker.startContainer();

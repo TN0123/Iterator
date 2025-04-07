@@ -85,5 +85,5 @@ const parseCodeFiles = (codeText) => {
 module.exports = {
   cleanCode,
   parseCodeFiles,
-  readDockerDirectory
+  readDockerDirectory,
 };
