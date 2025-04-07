@@ -145,6 +145,7 @@ const unitTestPrompt = `
     - Output **only the bash commands**, newline-separated, no explanations
     - Ensure proper indentation in generated Python code
     - Use "python3" instead of "python" for compatibility
+    - Ensure your file name is: UNIT_TESTER.(file_extension)
 
     Code:
     {code}

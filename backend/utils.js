@@ -1,4 +1,4 @@
-const docker = require("./docker");
+const docker = require("./dockerFunctions");
 const { exec } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -23,17 +23,19 @@ async function readDockerDirectory(containerId, directoryPath) {
 
         // Read each file using cat
         let fileReadPromises = files.map((file) => {
-          return new Promise((resolve, reject) => {
-            exec(
-              `docker exec ${containerId} cat ${file}`,
-              (err, stdout, stderr) => {
-                if (err || stderr) {
-                  return reject(err || new Error(stderr));
+          if (!file.split('.')[0].includes("UNIT_TESTER")) {
+            return new Promise((resolve, reject) => {
+              exec(
+                `docker exec ${containerId} cat ${file}`,
+                (err, stdout, stderr) => {
+                  if (err || stderr) {
+                    return reject(err || new Error(stderr));
+                  }
+                  resolve(`FILE: ${path.basename(file)}\n${stdout.trim()}`);
                 }
-                resolve(`FILE: ${path.basename(file)}\n${stdout.trim()}`);
-              }
-            );
-          });
+              );
+            });
+          }
         });
 
         Promise.all(fileReadPromises)

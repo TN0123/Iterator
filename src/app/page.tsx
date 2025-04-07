@@ -103,7 +103,11 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: input,
+          previousState: {
+            history: history,
+          },
+        }),
       });
 
       const data: ChatResponse = await response.json();
