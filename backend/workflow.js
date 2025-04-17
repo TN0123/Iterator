@@ -39,9 +39,6 @@ const graphStateChannels = {
   steps: {
     value: (prevSteps, steps) => steps,
   },
-  currentStep: {
-    value: (prevCurrentStep, currentStep) => currentStep,
-  },
 };
 
 // Create workflow graph
@@ -59,13 +56,8 @@ const MAXITERATIONS = 5;
 // conditional routing
 
 const reviewConditionalEdges = (state) => {
-  if (
-    (state.isCorrect && state.currentStep == state.steps.length - 1) ||
-    state.iterations >= MAXITERATIONS
-  ) {
+  if (state.isCorrect || state.iterations >= MAXITERATIONS) {
     return "summarize";
-  } else if (state.isCorrect) {
-    return "generate";
   } else {
     return "revise";
   }

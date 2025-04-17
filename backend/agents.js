@@ -3,23 +3,15 @@ const { RunnableSequence } = require("@langchain/core/runnables");
 const { ChatPromptTemplate } = require("@langchain/core/prompts");
 const promptValues = require("./prompts");
 const docker = require("./dockerFunctions");
-const docker = require("./dockerFunctions");
 const utils = require("./utils");
 const { END } = require("@langchain/langgraph");
 
 require("dotenv").config();
 
 // Initialize Models
-const ai_a = new ChatGoogleGenerativeAI({
+const llm = new ChatGoogleGenerativeAI({
   modelName: "gemini-2.0-flash",
   apiKey: process.env.GEMINI_API_KEY,
-  maxOutputTokens: 2048,
-});
-
-const ai_b = new ChatGoogleGenerativeAI({
-  modelName: "gemini-2.0-flash",
-  apiKey: process.env.GEMINI_API_KEY,
-  maxOutputTokens: 2048,
 });
 
 // Set up Prompts
@@ -48,7 +40,7 @@ const instructAgent = async (state) => {
     "/code"
   );
 
-  const chain = RunnableSequence.from([prompts.instruct, ai_a]);
+  const chain = RunnableSequence.from([prompts.instruct, llm]);
   const response = await chain.invoke({
     task: state.task,
     code: currentCode,
@@ -63,7 +55,7 @@ const instructAgent = async (state) => {
   const instructions = instructResult.instructions;
 
   const steps = instructResult.steps;
-  // console.log("INSTRUCT RESULT: ", instructResult);
+  console.log("INSTRUCTIONS: ", instructResult);
 
   const newHistory = [
     ...(state.history || []),
@@ -76,40 +68,35 @@ const instructAgent = async (state) => {
     history: newHistory,
     instructions,
     steps,
-    currentStep: 0,
     next: "generate",
   };
 };
 
 const generateAgent = async (state) => {
   console.log("GENERATE STEP");
-  console.log("CURRENT TASK: ", state.steps[state.currentStep]);
 
-  const chain = RunnableSequence.from([prompts.generate, ai_b]);
-
-  const response = await chain.invoke({
-    mainTask: state.instructions,
-    subTask: state.steps[0],
-    code: state.codebase,
-  });
-
-  const code = response.content;
-
-  // console.log("AI OUTPUT: ", code);
-
-  // Parse code into files
-  const codeFiles = utils.parseCodeFiles(code);
-
-  // console.log("CODE FILES: ", codeFiles);
+  const chain = RunnableSequence.from([prompts.generate, llm]);
 
   let codeFilesString = "";
-  // Save files to Docker container
-  for (const [filename, content] of Object.entries(codeFiles)) {
-    await docker.createOrUpdateFile(state.container, filename, content);
-    codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
+
+  for (i = 0; i < state.steps.length; i++) {
+    console.log("CURRENT STEP: ", state.steps[i]);
+    const response = await chain.invoke({
+      mainTask: state.instructions,
+      subTask: state.steps[i],
+      code: state.codebase,
+    });
+    const code = response.content;
+    const codeFiles = utils.parseCodeFiles(code);
+    codeFilesString = "";
+    for (const [filename, content] of Object.entries(codeFiles)) {
+      await docker.createOrUpdateFile(state.container, filename, content);
+      codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
+    }
+    console.log("CODE: ", codeFilesString);
   }
 
-  console.log("GENERATED CODE: ", codeFilesString);
+  // console.log("GENERATED CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),
@@ -126,10 +113,9 @@ const generateAgent = async (state) => {
 
 const unitTestingAgent = async (state) => {
   console.log("UNIT TESTING STEP");
-  const chain = RunnableSequence.from([prompts.unitTesting, ai_a]);
+  const chain = RunnableSequence.from([prompts.unitTesting, llm]);
   const response = await chain.invoke({
-    mainTask: state.instructions,
-    subTask: state.steps[state.currentStep],
+    task: state.instructions,
     code: state.currentCode,
   });
 
@@ -138,9 +124,9 @@ const unitTestingAgent = async (state) => {
   // console.log("END OF CONSOLE.LOG");
   const exec = await docker.execInContainer(state.container, unitTestCommands);
   let output = `\nCommand:\n${unitTestCommands}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
-  console.log(output);
+  // console.log(output);
 
-  // console.log("UNIT TEST OUTPUT:", output);
+  console.log("UNIT TEST OUTPUT:", output);
 
   return output;
 };
@@ -148,7 +134,7 @@ const unitTestingAgent = async (state) => {
 const reviewAgent = async (state) => {
   console.log("REVIEW STEP");
 
-  const chain = RunnableSequence.from([prompts.review, ai_a]);
+  const chain = RunnableSequence.from([prompts.review, llm]);
   const currentCode = await utils.readDockerDirectory(
     state.container.id,
     "/code"
@@ -157,29 +143,25 @@ const reviewAgent = async (state) => {
   // console.log("CODEBASE: ", state.codebase);
 
   const response = await chain.invoke({
-    mainTask: state.instructions,
-    subTask: state.steps[state.currentStep],
+    task: state.instructions,
     code: currentCode,
   });
 
   let codeReview = response.content;
-  const unitTest = codeReview.includes("UNIT TEST");
+  // const unitTest = codeReview.includes("UNIT TEST");
 
-  if (unitTest) {
-    console.log("UNIT TESTING...");
-    let unitTestOutput = await unitTestingAgent(state);
-    const chain = RunnableSequence.from([prompts.review_ut, ai_a]);
-    const response = await chain.invoke({
-      mainTask: state.instructions,
-      subTask: state.steps[state.currentStep],
-      code: currentCode,
-      unitTestResults: unitTestOutput,
-    });
-    codeReview = response.content;
-  }
+  // if (unitTest) {
+  //   let unitTestOutput = await unitTestingAgent(state);
+  //   const chain = RunnableSequence.from([prompts.review_ut, llm]);
+  //   const response = await chain.invoke({
+  //     task: state.instructions,
+  //     code: currentCode,
+  //     unitTestResults: unitTestOutput,
+  //   });
+  //   codeReview = response.content;
+  // }
 
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
-  const currentStep = isCorrect ? state.currentStep + 1 : state.currentStep;
   console.log("REVIEW: ", codeReview);
   const newIterations = isCorrect ? 0 : state.iterations;
 
@@ -192,7 +174,6 @@ const reviewAgent = async (state) => {
     state,
     history: newHistory,
     isCorrect,
-    currentStep,
     lastReview: codeReview,
     iterations: newIterations,
   };
@@ -200,17 +181,15 @@ const reviewAgent = async (state) => {
 
 const reviseAgent = async (state) => {
   console.log("REVISE STEP");
-  console.log("CURRENT TASK: ", state.steps[state.currentStep]);
 
-  const chain = RunnableSequence.from([prompts.revise, ai_b]);
+  const chain = RunnableSequence.from([prompts.revise, llm]);
   const currentCode = await utils.readDockerDirectory(
     state.container.id,
     "/code"
   );
 
   const response = await chain.invoke({
-    mainTask: state.instructions,
-    subTask: state.steps[state.currentStep],
+    task: state.instructions,
     review: state.lastReview,
     code: currentCode,
   });
@@ -246,7 +225,7 @@ const reviseAgent = async (state) => {
 const summarizeAgent = async (state) => {
   console.log("SUMMARIZE STEP");
 
-  const chain = RunnableSequence.from([prompts.summarize, ai_a]);
+  const chain = RunnableSequence.from([prompts.summarize, llm]);
 
   const response = await chain.invoke({
     codebase: state.codebase,
@@ -254,7 +233,7 @@ const summarizeAgent = async (state) => {
   });
 
   const summary = utils.cleanCode(response.content);
-  console.log("SUMMARY: ", summary);
+  // console.log("SUMMARY: ", summary);
 
   const newHistory = [
     ...(state.history || []),

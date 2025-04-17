@@ -24,13 +24,8 @@ testWorkflow.addNode("revise", agents.reviseAgent);
 testWorkflow.addNode("summarize", agents.summarizeAgent);
 
 const reviewConditionalEdges = (state) => {
-  if (
-    (state.isCorrect && state.currentStep == state.steps.length - 1) ||
-    state.iterations >= MAXITERATIONS
-  ) {
+  if (state.isCorrect || state.iterations >= MAXITERATIONS) {
     return "summarize";
-  } else if (state.isCorrect) {
-    return "generate";
   } else {
     return "revise";
   }
