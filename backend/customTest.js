@@ -17,6 +17,8 @@ const llm = new ChatGoogleGenerativeAI({
 const MAXITERATIONS = 3;
 
 const testWorkflow = new StateGraph({ channels: workflow.graphStateChannels });
+
+testWorkflow.addNode("design", agents.designAgent);
 testWorkflow.addNode("instruct", agents.instructAgent);
 testWorkflow.addNode("generate", agents.generateAgent);
 testWorkflow.addNode("review", agents.reviewAgent);
@@ -31,7 +33,8 @@ const reviewConditionalEdges = (state) => {
   }
 };
 
-testWorkflow.addEdge(START, "instruct");
+testWorkflow.addEdge(START, "design");
+testWorkflow.addEdge("design", "instruct");
 testWorkflow.addEdge("instruct", "generate");
 testWorkflow.addEdge("generate", "review");
 testWorkflow.addConditionalEdges("review", reviewConditionalEdges);
@@ -43,13 +46,9 @@ const testChain = testWorkflow.compile();
 async function main() {
   const testContainer = await docker.startContainer();
   const result = await testChain.invoke({
-    task: "write a function that takes two numbers and returns their sum",
+    task: "build a snake game web app",
     container: testContainer,
   });
-  console.log(result.instructions);
-  console.log(result.steps);
-  console.log(result.codebase);
-  console.log(result.lastReview);
 }
 
 main();

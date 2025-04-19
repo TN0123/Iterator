@@ -16,22 +16,33 @@ const llm = new ChatGoogleGenerativeAI({
 
 // Set up Prompts
 const prompts = {
+  design: ChatPromptTemplate.fromTemplate(promptValues.designPrompt),
   instruct: ChatPromptTemplate.fromTemplate(promptValues.instructPrompt),
   review: ChatPromptTemplate.fromTemplate(promptValues.reviewPrompt),
-  review_ut: ChatPromptTemplate.fromTemplate(promptValues.reviewPrompt_givenUT),
   generate: ChatPromptTemplate.fromTemplate(promptValues.generatePrompt),
   revise: ChatPromptTemplate.fromTemplate(promptValues.revisePrompt),
-  generateWithError: ChatPromptTemplate.fromTemplate(
-    promptValues.generateWithErrorPrompt
-  ),
-  unitTesting: ChatPromptTemplate.fromTemplate(promptValues.unitTestPrompt),
   summarize: ChatPromptTemplate.fromTemplate(promptValues.summarizePrompt),
 };
 
 // Define Agents
 
-// add new agent that can summarize existing codebase if it exists and add it to metadata
-// this agent should act before instruct and between generate and review
+const designAgent = async (state) => {
+  console.log("DESIGN STEP");
+  const chain = RunnableSequence.from([prompts.design, llm]);
+  const response = await chain.invoke({
+    task: state.task,
+  });
+
+  const detailedTask = response.content;
+
+  // console.log("DESIGN RESPONSE: ", detailedTask);
+
+  return {
+    state,
+    task: detailedTask,
+  };
+};
+
 const instructAgent = async (state) => {
   console.log("INSTRUCT STEP");
 
@@ -47,15 +58,12 @@ const instructAgent = async (state) => {
   });
   const instructResult = JSON.parse(utils.cleanCode(response.content));
 
-  // uncomment to guarantee unit testing
-  // instructResult.instructions =
-  //   instructResult.instructions +
-  //   "\nJEFF, make sure to unit test this (everyone else, this doesn't apply to you)";
-
   const instructions = instructResult.instructions;
 
   const steps = instructResult.steps;
   console.log("INSTRUCTIONS: ", instructResult);
+
+  const fileTree = instructResult.fileTree;
 
   const newHistory = [
     ...(state.history || []),
@@ -65,10 +73,10 @@ const instructAgent = async (state) => {
   return {
     state,
     codebase: currentCode,
+    metaKnowledge: fileTree,
     history: newHistory,
     instructions,
     steps,
-    next: "generate",
   };
 };
 
@@ -80,23 +88,27 @@ const generateAgent = async (state) => {
   let codeFilesString = "";
 
   for (i = 0; i < state.steps.length; i++) {
-    console.log("CURRENT STEP: ", state.steps[i]);
+    console.log("CURRENT STEP: ", i + 1);
+    const currentCode = await utils.readDockerDirectory(
+      state.container.id,
+      "/code"
+    );
     const response = await chain.invoke({
-      mainTask: state.instructions,
-      subTask: state.steps[i],
-      code: state.codebase,
+      instructions: state.instructions,
+      step: state.steps[i],
+      fileTree: state.metaKnowledge,
+      code: currentCode,
     });
-    const code = response.content;
-    const codeFiles = utils.parseCodeFiles(code);
+    const newCodeFiles = utils.parseCodeFiles(response.content);
     codeFilesString = "";
-    for (const [filename, content] of Object.entries(codeFiles)) {
+    for (const [filename, content] of Object.entries(newCodeFiles)) {
       await docker.createOrUpdateFile(state.container, filename, content);
       codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
     }
-    console.log("CODE: ", codeFilesString);
+    // console.log("CODE: ", codeFilesString);
   }
 
-  // console.log("GENERATED CODE: ", codeFilesString);
+  // console.log("GENERATE STEP CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),
@@ -107,63 +119,23 @@ const generateAgent = async (state) => {
     state,
     codebase: codeFilesString,
     history: newHistory,
-    next: "review",
   };
-};
-
-const unitTestingAgent = async (state) => {
-  console.log("UNIT TESTING STEP");
-  const chain = RunnableSequence.from([prompts.unitTesting, llm]);
-  const response = await chain.invoke({
-    task: state.instructions,
-    code: state.currentCode,
-  });
-
-  const unitTestCommands = utils.cleanCode(response.content);
-  // console.log("UNIT TEST COMMANDS: ", unitTestCommands);
-  // console.log("END OF CONSOLE.LOG");
-  const exec = await docker.execInContainer(state.container, unitTestCommands);
-  let output = `\nCommand:\n${unitTestCommands}\nOutput:\n${exec.stdout}\nError:\n${exec.stderr}\n`;
-  // console.log(output);
-
-  console.log("UNIT TEST OUTPUT:", output);
-
-  return output;
 };
 
 const reviewAgent = async (state) => {
   console.log("REVIEW STEP");
 
   const chain = RunnableSequence.from([prompts.review, llm]);
-  const currentCode = await utils.readDockerDirectory(
-    state.container.id,
-    "/code"
-  );
-
-  // console.log("CODEBASE: ", state.codebase);
 
   const response = await chain.invoke({
-    task: state.instructions,
-    code: currentCode,
+    task: state.task,
+    code: state.codebase,
   });
 
   let codeReview = response.content;
-  // const unitTest = codeReview.includes("UNIT TEST");
-
-  // if (unitTest) {
-  //   let unitTestOutput = await unitTestingAgent(state);
-  //   const chain = RunnableSequence.from([prompts.review_ut, llm]);
-  //   const response = await chain.invoke({
-  //     task: state.instructions,
-  //     code: currentCode,
-  //     unitTestResults: unitTestOutput,
-  //   });
-  //   codeReview = response.content;
-  // }
 
   const isCorrect = codeReview.toLowerCase().includes("the code is correct");
   console.log("REVIEW: ", codeReview);
-  const newIterations = isCorrect ? 0 : state.iterations;
 
   const newHistory = [
     ...(state.history || []),
@@ -175,7 +147,6 @@ const reviewAgent = async (state) => {
     history: newHistory,
     isCorrect,
     lastReview: codeReview,
-    iterations: newIterations,
   };
 };
 
@@ -183,20 +154,14 @@ const reviseAgent = async (state) => {
   console.log("REVISE STEP");
 
   const chain = RunnableSequence.from([prompts.revise, llm]);
-  const currentCode = await utils.readDockerDirectory(
-    state.container.id,
-    "/code"
-  );
 
   const response = await chain.invoke({
     task: state.instructions,
     review: state.lastReview,
-    code: currentCode,
+    code: state.codebase,
   });
 
   const code = response.content;
-
-  // console.log("AI OUTPUT: ", code);
 
   const codeFiles = utils.parseCodeFiles(code);
   let codeFilesString = "";
@@ -205,8 +170,8 @@ const reviseAgent = async (state) => {
     codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
-  // console.log("OLD CODE: ", state.codebase);
-  // console.log("REVISED CODE: ", codeFilesString);
+  console.log("OLD CODE: ", state.codebase);
+  console.log("REVISED CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),
@@ -249,6 +214,7 @@ const summarizeAgent = async (state) => {
 };
 
 module.exports = {
+  designAgent,
   instructAgent,
   generateAgent,
   reviewAgent,

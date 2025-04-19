@@ -21,9 +21,6 @@ const graphStateChannels = {
   isCorrect: {
     value: (prevIsCorrect, isCorrect) => isCorrect,
   },
-  next: {
-    value: (prevNext, next) => next,
-  },
   history: {
     value: (prevHistory, history) => history,
   },
@@ -45,13 +42,14 @@ const graphStateChannels = {
 const workflow = new StateGraph({ channels: graphStateChannels });
 
 // Add nodes to graph with proper configuration
+workflow.addNode("design", agents.designAgent);
 workflow.addNode("instruct", agents.instructAgent);
 workflow.addNode("generate", agents.generateAgent);
 workflow.addNode("review", agents.reviewAgent);
 workflow.addNode("revise", agents.reviseAgent);
 workflow.addNode("summarize", agents.summarizeAgent);
 
-const MAXITERATIONS = 5;
+const MAXITERATIONS = 3;
 
 // conditional routing
 
@@ -64,7 +62,8 @@ const reviewConditionalEdges = (state) => {
 };
 
 // Add edges
-workflow.addEdge(START, "instruct");
+workflow.addEdge(START, "design");
+workflow.addEdge("design", "instruct");
 workflow.addEdge("instruct", "generate");
 workflow.addEdge("generate", "review");
 workflow.addConditionalEdges("review", reviewConditionalEdges);
