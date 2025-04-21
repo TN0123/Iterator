@@ -46,7 +46,7 @@ const designAgent = async (state) => {
 const instructAgent = async (state) => {
   console.log("INSTRUCT STEP");
 
-  const currentCode = await utils.readDockerDirectory(
+  const currentCode = await docker.readDockerDirectory(
     state.container.id,
     "/code"
   );
@@ -88,8 +88,8 @@ const generateAgent = async (state) => {
   let codeFilesString = "";
 
   for (i = 0; i < state.steps.length; i++) {
-    console.log("CURRENT STEP: ", i + 1);
-    const currentCode = await utils.readDockerDirectory(
+    console.log("CURRENT STEP: ", i + 1, " of ", state.steps.length);
+    const currentCode = await docker.readDockerDirectory(
       state.container.id,
       "/code"
     );
@@ -99,11 +99,16 @@ const generateAgent = async (state) => {
       fileTree: state.metaKnowledge,
       code: currentCode,
     });
-    const newCodeFiles = utils.parseCodeFiles(response.content);
+    const { files: newCodeFiles, deletedFiles } = utils.parseCodeFiles(
+      response.content
+    );
     codeFilesString = "";
     for (const [filename, content] of Object.entries(newCodeFiles)) {
       await docker.createOrUpdateFile(state.container, filename, content);
       codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
+    }
+    for (const filename of deletedFiles) {
+      await docker.deleteFile(state.container, filename);
     }
     // console.log("CODE: ", codeFilesString);
   }
@@ -155,23 +160,27 @@ const reviseAgent = async (state) => {
 
   const chain = RunnableSequence.from([prompts.revise, llm]);
 
+  console.log("revising...");
+
   const response = await chain.invoke({
     task: state.instructions,
-    review: state.lastReview,
     code: state.codebase,
+    review: state.lastReview,
   });
 
-  const code = response.content;
+  console.log("done revising");
 
-  const codeFiles = utils.parseCodeFiles(code);
+  const { files: newCodeFiles, deletedFiles } = utils.parseCodeFiles(
+    response.content
+  );
   let codeFilesString = "";
-  for (const [filename, content] of Object.entries(codeFiles)) {
+  for (const [filename, content] of Object.entries(newCodeFiles)) {
     await docker.createOrUpdateFile(state.container, filename, content);
     codeFilesString += `FILE: ${filename}\n${utils.cleanCode(content)}\n\n`;
   }
 
-  console.log("OLD CODE: ", state.codebase);
-  console.log("REVISED CODE: ", codeFilesString);
+  // console.log("OLD CODE: ", state.codebase);
+  // console.log("REVISED CODE: ", codeFilesString);
 
   const newHistory = [
     ...(state.history || []),

@@ -3,6 +3,7 @@ const tar = require("tar-stream");
 const fs = require("fs").promises;
 const path = require("path");
 const { Readable } = require("stream");
+const { exec } = require("child_process");
 
 require("dotenv").config();
 
@@ -134,6 +135,46 @@ const listFiles = async (container) => {
   }
 };
 
+async function readDockerDirectory(containerId, directoryPath) {
+  return new Promise((resolve, reject) => {
+    exec(
+      `docker exec ${containerId} find ${directoryPath} -type f`,
+      (err, stdout, stderr) => {
+        if (err || stderr) {
+          return reject(err || new Error(stderr));
+        }
+
+        const files = stdout.trim().split("\n").filter(Boolean); // Remove empty lines
+
+        if (files.length === 0) {
+          return resolve("No files found.");
+        }
+
+        // Read each file using cat
+        let fileReadPromises = files.map((file) => {
+          if (!file.split(".")[0].includes("UNIT_TESTER")) {
+            return new Promise((resolve, reject) => {
+              exec(
+                `docker exec ${containerId} cat ${file}`,
+                (err, stdout, stderr) => {
+                  if (err || stderr) {
+                    return reject(err || new Error(stderr));
+                  }
+                  resolve(`FILE: ${path.basename(file)}\n${stdout.trim()}`);
+                }
+              );
+            });
+          }
+        });
+
+        Promise.all(fileReadPromises)
+          .then((fileContents) => resolve(fileContents.join("\n\n")))
+          .catch(reject);
+      }
+    );
+  });
+}
+
 /**
  * Deletes a file in the Docker container
  * @param {Object} container - The dockerode container instance
@@ -198,4 +239,5 @@ module.exports = {
   listFiles,
   deleteFile,
   execInContainer,
+  readDockerDirectory,
 };

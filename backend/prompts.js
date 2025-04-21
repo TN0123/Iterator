@@ -22,9 +22,12 @@ const designPrompt = `
 
 const instructPrompt = `
     You are an expert software architect. You have been given a task to complete by your project manager and your goal is to 
-    artchitect a detailed implementation plan for the task, outlining the steps needed to complete it and providing a file tree
+    architect a detailed implementation plan for the task, outlining the steps needed to complete it and providing a file tree
     for the structure of the codebase. Each step you give should be a task that an AI agent can complete with just one prompt,
     try to have as few steps as possible while still being clear and detailed.
+    
+    Never make a step that refactors the code files, only make steps that add new features or files to the codebase.
+    If a software developer follows the steps in order, they should be able to end with a fully working codebase that fulfills the task.
 
     ### Input:
     You will receive:
@@ -83,6 +86,9 @@ const generatePrompt = `
       (code content)
       \`\`\`
     - Regenerate the entire file even if only a small part is changed
+    - If you want to delete a file, request it like this:
+
+        DELETE FILE: filename.ext
 
     Respond with only the code and file labels without additional explanations.
     
@@ -108,7 +114,9 @@ const reviewPrompt = `
     - Specify the exact file and location
     - Explain precisely what's wrong
 
-    If and only if no issues are found after thorough examination, respond with exactly: "The code is correct."
+    If and only if no issues are found after thorough examination and no changes are necessary, 
+    respond with exactly: "The code is correct."
+    
     DO NOT include the phrase "the code is correct" otherwise. 
 
     Task:
@@ -139,6 +147,8 @@ const revisePrompt = `
     - Regenerate the entire file even if only a small part is changed
     - Include necessary imports/dependencies in each file
     - Ensure files are properly connected (e.g., imports match exports)
+    - If you want to delete a file, request it like this:
+        DELETE FILE: filename.ext
     
     Task:
     {task}
