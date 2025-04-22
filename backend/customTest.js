@@ -46,7 +46,7 @@ const testChain = testWorkflow.compile();
 async function main() {
   const testContainer = await docker.startContainer();
   const result = await testChain.invoke({
-    task: "create a simple calculator app",
+    task: "make a snake game web app",
     container: testContainer,
   });
 }

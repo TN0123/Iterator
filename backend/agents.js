@@ -14,6 +14,11 @@ const llm = new ChatGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+const smartllm = new ChatGoogleGenerativeAI({
+  modelName: "gemini-2.5-pro-exp-03-25",
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
 // Set up Prompts
 const prompts = {
   design: ChatPromptTemplate.fromTemplate(promptValues.designPrompt),
@@ -51,7 +56,7 @@ const instructAgent = async (state) => {
     "/code"
   );
 
-  const chain = RunnableSequence.from([prompts.instruct, llm]);
+  const chain = RunnableSequence.from([prompts.instruct, smartllm]);
   const response = await chain.invoke({
     task: state.task,
     code: currentCode,
@@ -130,7 +135,7 @@ const generateAgent = async (state) => {
 const reviewAgent = async (state) => {
   console.log("REVIEW STEP");
 
-  const chain = RunnableSequence.from([prompts.review, llm]);
+  const chain = RunnableSequence.from([prompts.review, smartllm]);
 
   const response = await chain.invoke({
     task: state.task,
