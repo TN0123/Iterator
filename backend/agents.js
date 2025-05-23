@@ -15,7 +15,7 @@ const llm = new ChatGoogleGenerativeAI({
 });
 
 const smartllm = new ChatGoogleGenerativeAI({
-  modelName: "gemini-2.5-pro-exp-03-25",
+  modelName: "gemini-2.5-pro-preview-05-06",
   apiKey: process.env.GEMINI_API_KEY,
 });
 
